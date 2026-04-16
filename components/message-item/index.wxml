@@ -1,0 +1,40 @@
+<view class="message-row {{message.role === 'user' ? 'message-row-user' : 'message-row-assistant'}}">
+  <view wx:if="{{message.role !== 'user'}}" class="assistant-avatar">
+    <image class="assistant-avatar-image" src="../../assets/images/welcome-balance.png" mode="aspectFill"></image>
+  </view>
+
+  <view class="message-main {{message.role === 'user' ? 'message-main-user' : ''}}">
+    <view class="message-meta">
+      <text>{{message.role === 'user' ? '我' : '涌见AI'}}</text>
+    </view>
+
+    <view
+      class="message-bubble {{message.role === 'user' ? 'message-bubble-user' : 'message-bubble-assistant'}} {{message.type === 'typing' ? 'message-bubble-typing' : ''}}"
+    >
+      <text
+        wx:if="{{message.type === 'text' || (message.type === 'rich' && message.status === 'streaming')}}"
+        class="message-text"
+      >
+        {{message.content}}
+      </text>
+
+      <message-rich
+        wx:elif="{{message.type === 'rich'}}"
+        content="{{message.content}}"
+        theme="{{theme}}"
+      />
+
+      <message-image-card
+        wx:elif="{{message.type === 'image-card'}}"
+        card="{{message.extra.card}}"
+        theme="{{theme}}"
+      />
+
+      <view wx:elif="{{message.type === 'typing'}}" class="typing-dots">
+        <view class="typing-dot"></view>
+        <view class="typing-dot"></view>
+        <view class="typing-dot"></view>
+      </view>
+    </view>
+  </view>
+</view>

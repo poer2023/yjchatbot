@@ -1,0 +1,14 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - heading "YJ Chatbot Demo" [level=1] [ref=e5]
+        - paragraph [ref=e6]: 浏览器内「小程序风格」展示壳，数据与逻辑与仓库内 mock 层一致，便于录屏与评审。
+    - generic [ref=e8]:
+      - generic [ref=e11]: 12:29
+      - main [ref=e17]:
+        - generic [ref=e18]:
+          - generic [ref=e19]
+          - generic
+          - generic
+  - status

@@ -1,0 +1,15 @@
+{
+  "pages": [
+    "pages/chat/index",
+    "pages/settings/index"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#f4f1e8",
+    "navigationBarTitleText": "YJ Chatbot Demo",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f4f1e8"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

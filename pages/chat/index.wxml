@@ -1,0 +1,262 @@
+<view class="chat-page">
+  <view class="chat-shell">
+    <view class="chat-header">
+      <view class="header-safe" style="height: {{headerSafeHeight}}px;"></view>
+      <view class="header-row" style="height: {{navBarHeight}}px; padding-left: {{headerEdgePadding}}px;">
+        <view class="header-left-actions">
+          <view class="nav-icon-button" bindtap="openDrawer">
+            <view class="menu-bars">
+              <view class="menu-bar menu-bar-top"></view>
+              <view class="menu-bar menu-bar-bottom"></view>
+            </view>
+          </view>
+
+          <view class="nav-icon-button" bindtap="handleCreateSession">
+            <image class="compose-icon" src="../../assets/icons/compose.svg" mode="aspectFit"></image>
+          </view>
+        </view>
+
+        <view
+          class="header-center"
+          style="left: {{titleSafeLeft}}px; right: {{titleSafeRight}}px;"
+        >
+          <text class="header-title">
+            <text>涌见AI</text>
+            <text class="header-title-dot">·</text>
+            <text class="header-title-mode {{activeMode === 'expert' ? 'header-title-mode-expert' : 'header-title-mode-quick'}}">
+              {{activeMode === 'expert' ? '研究模式' : '咨询模式'}}
+            </text>
+          </text>
+        </view>
+
+        <view
+          class="header-capsule"
+          style="right: {{capsuleRight}}px; width: {{capsuleWidth}}px; height: {{capsuleHeight}}px;"
+        >
+          <view class="capsule-action" bindtap="toggleCapsuleMenu">
+            <image class="capsule-more-icon" src="../../assets/icons/capsule-more.svg" mode="aspectFit"></image>
+          </view>
+          <view class="capsule-divider"></view>
+          <view class="capsule-action" bindtap="handleCapsuleCloseTap">
+            <image class="capsule-close-icon" src="../../assets/icons/capsule-close.svg" mode="aspectFit"></image>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <scroll-view
+      class="chat-scroll"
+      enhanced="{{true}}"
+      scroll-into-view="{{scrollIntoView}}"
+      scroll-y="{{true}}"
+      show-scrollbar="{{false}}"
+    >
+      <view class="message-stack {{showWelcome ? 'message-stack-welcome' : ''}}">
+        <view id="welcome-anchor"></view>
+
+        <view wx:if="{{showWelcome}}" class="welcome-stage">
+          <view class="welcome-logo">
+            <image class="welcome-logo-icon" src="../../assets/images/welcome-balance.png" mode="aspectFit"></image>
+          </view>
+          <text class="welcome-title">使用{{activeMode === 'quick' ? '咨询' : '研究'}}模式开始对话</text>
+
+          <view class="mode-switch">
+            <view
+              class="mode-pill {{activeMode === 'quick' ? 'mode-pill-active' : ''}}"
+              data-mode="quick"
+              bindtap="handleModeChange"
+            >
+              <image class="mode-icon" src="../../assets/icons/flash.svg" mode="aspectFit"></image>
+              <text>咨询模式</text>
+            </view>
+            <view
+              class="mode-pill {{activeMode === 'expert' ? 'mode-pill-active' : ''}}"
+              data-mode="expert"
+              bindtap="handleModeChange"
+            >
+              <image class="mode-icon" src="../../assets/icons/compass.svg" mode="aspectFit"></image>
+              <text>研究模式</text>
+            </view>
+          </view>
+
+          <text class="mode-caption">
+            {{activeMode === 'quick' ? '适合日常咨询，即时响应' : '适合复杂问题，输出更完整'}}
+          </text>
+        </view>
+
+        <block wx:for="{{messages}}" wx:key="id">
+          <view id="msg-{{item.id}}" class="message-anchor">
+            <message-item message="{{item}}" theme="{{settings.theme}}"></message-item>
+          </view>
+        </block>
+      </view>
+    </scroll-view>
+
+    <chat-input
+      value="{{draft}}"
+      disabled="{{isResponding}}"
+      showSearchChips="{{activeMode === 'expert'}}"
+      placeholder="{{inputPlaceholder}}"
+      bind:change="handleDraftChange"
+      bind:send="handleSend"
+      bind:stub="handleFeatureStub"
+    ></chat-input>
+  </view>
+
+  <view class="capsule-menu-layer {{showCapsuleMenu ? 'capsule-menu-layer-visible' : ''}}">
+    <view class="capsule-menu-mask" bindtap="closeCapsuleMenu"></view>
+    <view
+      class="capsule-menu-panel"
+      catchtap="noop"
+      style="top: {{capsuleMenuTop}}px; right: {{capsuleRight}}px;"
+    >
+      <view class="capsule-menu-arrow"></view>
+      <button
+        class="capsule-menu-item"
+        open-type="share"
+        data-action="share"
+        bindtap="handleCapsuleAction"
+      >
+        转发给朋友
+      </button>
+      <view class="capsule-menu-separator"></view>
+      <button class="capsule-menu-item" data-action="new" bindtap="handleCapsuleAction">
+        新建对话
+      </button>
+      <view class="capsule-menu-separator"></view>
+      <button class="capsule-menu-item" data-action="settings" bindtap="handleCapsuleAction">
+        打开设置
+      </button>
+    </view>
+  </view>
+
+  <sidebar-drawer
+    visible="{{showDrawer}}"
+    groups="{{historyGroups}}"
+    activeSessionId="{{activeSessionId}}"
+    disabled="{{isResponding}}"
+    profileName="{{profileName}}"
+    profileInitial="{{profileInitial}}"
+    topOffset="{{headerPadTop}}"
+    bind:close="closeDrawer"
+    bind:select="handleSessionSelect"
+    bind:settings="openSettingsSheet"
+    bind:blocked="handleDrawerBlocked"
+  ></sidebar-drawer>
+
+  <view class="settings-overlay {{showSettingsSheet ? 'settings-overlay-visible' : ''}}">
+    <view class="settings-mask" bindtap="closeSettingsSheet"></view>
+    <view class="settings-sheet" catchtap="closeSettingsSheet">
+      <view class="settings-sheet-card" catchtap="noop">
+        <text class="settings-sheet-title">设置</text>
+        <view class="settings-close" bindtap="closeSettingsSheet">
+          <view class="settings-close-icon">
+            <view class="settings-close-line settings-close-line-left"></view>
+            <view class="settings-close-line settings-close-line-right"></view>
+          </view>
+        </view>
+
+        <view class="settings-section">
+          <text class="settings-section-label">账户</text>
+          <view class="settings-list">
+            <view class="settings-row" data-action="account" bindtap="handleSettingsAction">
+              <view class="settings-row-left">
+                <image class="settings-row-icon" src="../../assets/icons/user.svg" mode="aspectFit"></image>
+                <text class="settings-row-text">账号管理</text>
+              </view>
+              <image class="settings-row-arrow" src="../../assets/icons/chevron-right.svg" mode="aspectFit"></image>
+            </view>
+            <view class="settings-row settings-row-border" data-action="data" bindtap="handleSettingsAction">
+              <view class="settings-row-left">
+                <image class="settings-row-icon" src="../../assets/icons/storage.svg" mode="aspectFit"></image>
+                <text class="settings-row-text">数据管理</text>
+              </view>
+              <image class="settings-row-arrow" src="../../assets/icons/chevron-right.svg" mode="aspectFit"></image>
+            </view>
+          </view>
+        </view>
+
+        <view class="settings-section">
+          <text class="settings-section-label">应用</text>
+          <view class="settings-list">
+            <view class="settings-row" data-action="language" bindtap="handleSettingsAction">
+              <view class="settings-row-left">
+                <image class="settings-row-icon" src="../../assets/icons/globe.svg" mode="aspectFit"></image>
+                <text class="settings-row-text">语言</text>
+              </view>
+              <view class="settings-row-meta">
+                <text class="settings-row-value">{{languageLabel}}</text>
+                <image class="settings-row-arrow" src="../../assets/icons/chevron-right.svg" mode="aspectFit"></image>
+              </view>
+            </view>
+            <view class="settings-row settings-row-border" data-action="appearance" bindtap="handleSettingsAction">
+              <view class="settings-row-left">
+                <image class="settings-row-icon" src="../../assets/icons/sun.svg" mode="aspectFit"></image>
+                <text class="settings-row-text">外观</text>
+              </view>
+              <view class="settings-row-meta">
+                <text class="settings-row-value">{{appearanceLabel}}</text>
+                <image class="settings-row-arrow" src="../../assets/icons/chevron-right.svg" mode="aspectFit"></image>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <view class="settings-section">
+          <text class="settings-section-label">关于</text>
+          <view class="settings-list">
+            <view class="settings-row" data-action="update" bindtap="handleSettingsAction">
+              <view class="settings-row-left">
+                <image class="settings-row-icon" src="../../assets/icons/info.svg" mode="aspectFit"></image>
+                <text class="settings-row-text">检查更新</text>
+              </view>
+              <view class="settings-row-meta">
+                <text class="settings-row-value">{{versionLabel}}</text>
+                <image class="settings-row-arrow" src="../../assets/icons/chevron-right.svg" mode="aspectFit"></image>
+              </view>
+            </view>
+            <view class="settings-row settings-row-border" data-action="agreement" bindtap="handleSettingsAction">
+              <view class="settings-row-left">
+                <image class="settings-row-icon" src="../../assets/icons/file.svg" mode="aspectFit"></image>
+                <text class="settings-row-text">服务协议</text>
+              </view>
+              <image class="settings-row-arrow" src="../../assets/icons/chevron-right.svg" mode="aspectFit"></image>
+            </view>
+          </view>
+        </view>
+
+        <view class="settings-section">
+          <view class="settings-list">
+            <view class="settings-row" data-action="help" bindtap="handleSettingsAction">
+              <view class="settings-row-left">
+                <image class="settings-row-icon" src="../../assets/icons/help.svg" mode="aspectFit"></image>
+                <text class="settings-row-text">帮助与反馈</text>
+              </view>
+              <image class="settings-row-arrow" src="../../assets/icons/chevron-right.svg" mode="aspectFit"></image>
+            </view>
+          </view>
+        </view>
+
+        <view class="logout-row" bindtap="handleLogoutTap">
+          <view class="settings-row-left">
+            <image class="settings-row-icon" src="../../assets/icons/logout.svg" mode="aspectFit"></image>
+            <text class="settings-row-text">退出登录</text>
+          </view>
+        </view>
+
+        <view class="settings-footer">
+          <text class="settings-footer-line">浙ICP备2023025841号-3A</text>
+          <text class="settings-footer-line">内容由 AI 生成，请仔细甄别，并合法使用</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <common-action-sheet
+    visible="{{showCommonActionSheet}}"
+    options="{{commonActionSheetOptions}}"
+    cancelText="取消"
+    bind:close="handleCommonActionSheetClose"
+    bind:select="handleCommonActionSheetSelect"
+  ></common-action-sheet>
+</view>

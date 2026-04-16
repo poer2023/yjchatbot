@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>YJ Chatbot · Web Demo 外壳</title>
+    <link rel="stylesheet" href="./css/app.css?v=20260416-98" />
+  </head>
+  <body>
+    <div class="demo-layout">
+      <div class="device-stage" aria-hidden="true">
+        <div class="device-stage-orbit"></div>
+        <div class="device-stage-floor"></div>
+      </div>
+
+      <div class="device-frame">
+        <span class="device-side-button device-side-button-action" aria-hidden="true"></span>
+        <span class="device-side-button device-side-button-volume-up" aria-hidden="true"></span>
+        <span class="device-side-button device-side-button-volume-down" aria-hidden="true"></span>
+        <span class="device-side-button device-side-button-power" aria-hidden="true"></span>
+
+        <div class="device-bezel">
+          <div class="device-island" aria-hidden="true">
+            <span class="device-island-sensor"></span>
+            <span class="device-island-camera"></span>
+          </div>
+          <div class="device-status-bar">
+            <span class="device-time" id="device-time">9:41</span>
+            <div class="device-status-icons" aria-hidden="true">
+              <img class="status-signal" src="./assets/icons/status-signal.svg" alt="" />
+              <img class="status-wifi" src="./assets/icons/status-wifi.svg" alt="" />
+              <span class="battery"><span class="battery-text">84</span></span>
+            </div>
+          </div>
+          <main class="device-screen" id="app-root"></main>
+          <div class="device-home-bar" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <!-- 需本地 HTTP 打开（ES Module）。终端: cd web-demo && python3 -m http.server 5173  打开 http://127.0.0.1:5173/ -->
+    <script type="module" src="./js/app.js?v=20260416-98"></script>
+  </body>
+</html>

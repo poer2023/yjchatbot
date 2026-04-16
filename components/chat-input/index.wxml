@@ -1,0 +1,103 @@
+<view class="chat-input">
+  <view wx:if="{{voiceMode && isVoiceRecording && showSearchChips}}" class="voice-record-panel voice-record-panel-top">
+    <view class="voice-wave-row">
+      <view
+        wx:for="{{voiceBars}}"
+        wx:key="index"
+        class="voice-wave-bar"
+        style="height: {{item}}rpx; animation-delay: {{index * 0.05}}s;"
+      ></view>
+    </view>
+  </view>
+
+  <view wx:if="{{showSearchChips}}" class="input-search-chips">
+    <view
+      wx:for="{{searchChips}}"
+      wx:key="id"
+      class="search-chip {{item.active ? 'search-chip-active' : ''}}"
+      data-kind="{{item.id}}"
+      bindtap="handleSearchChipTap"
+    >
+      <image class="search-chip-icon" src="{{item.icon}}" mode="aspectFit"></image>
+      <text>{{item.label}}</text>
+    </view>
+  </view>
+
+  <view wx:if="{{!voiceMode}}" class="input-main-capsule">
+    <view class="input-mic-wrap" data-kind="voice" bindtap="handleQuickAction">
+      <image class="input-mic-icon" src="../../assets/icons/mic.svg" mode="aspectFit"></image>
+    </view>
+
+    <textarea
+      auto-height
+      class="chat-textarea-flex"
+      cursor-spacing="28"
+      disabled="{{disabled}}"
+      hold-keyboard="{{true}}"
+      maxlength="2000"
+      placeholder="{{placeholder}}"
+      placeholder-class="textarea-placeholder"
+      value="{{internalValue}}"
+      bindinput="handleInput"
+      bindconfirm="handleSendTap"
+      confirm-type="send"
+    />
+
+    <view class="input-trailing-actions">
+      <view class="input-circle-btn input-circle-plus" data-kind="attach" bindtap="handleQuickAction">
+        <text class="input-plus-glyph">+</text>
+      </view>
+      <view
+        class="input-circle-btn input-circle-send {{canSend && !disabled ? 'input-circle-send-active' : ''}}"
+        bindtap="handleSendTap"
+      >
+        <image
+          wx:if="{{canSend && !disabled}}"
+          class="send-plane-icon"
+          src="../../assets/icons/send-plane-light.svg"
+          mode="aspectFit"
+        ></image>
+        <text wx:elif="{{disabled}}" class="send-loading">…</text>
+        <image wx:else class="send-plane-icon" src="../../assets/icons/send-plane.svg" mode="aspectFit"></image>
+      </view>
+    </view>
+  </view>
+
+  <view wx:elif class="voice-mode-shell">
+    <view wx:if="{{isVoiceRecording && !showSearchChips}}" class="voice-record-panel voice-record-panel-top">
+      <view class="voice-wave-row">
+        <view
+          wx:for="{{voiceBars}}"
+          wx:key="index"
+          class="voice-wave-bar"
+          style="height: {{item}}rpx; animation-delay: {{index * 0.05}}s;"
+        ></view>
+      </view>
+    </view>
+
+    <view
+      id="voice-hold-zone"
+      class="voice-hold-btn {{isVoiceRecording ? 'voice-hold-btn-recording' : ''}} {{isVoiceCancel ? 'voice-hold-btn-cancel' : ''}}"
+      bindtouchstart="handleVoiceHoldStart"
+      bindtouchmove="handleVoiceHoldMove"
+      bindtouchend="handleVoiceHoldEnd"
+      bindtouchcancel="handleVoiceHoldCancel"
+    >
+      <view
+        class="voice-hold-leading"
+        catchtap="handleVoiceExit"
+        catchtouchstart="noop"
+        catchtouchmove="noop"
+        catchtouchend="noop"
+      >
+        <image class="voice-hold-leading-icon" src="../../assets/icons/voice-text.svg" mode="aspectFit"></image>
+      </view>
+      <text class="voice-hold-text">{{isVoiceCancel ? '松手 取消' : '按住 说话'}}</text>
+      <view class="voice-hold-trailing">
+        <image class="voice-hold-trailing-icon" src="../../assets/icons/send-plane.svg" mode="aspectFit"></image>
+      </view>
+    </view>
+  </view>
+
+  <text class="input-disclaimer">内容由 AI 生成</text>
+</view>

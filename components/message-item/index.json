@@ -1,0 +1,8 @@
+{
+  "component": true,
+  "styleIsolation": "shared",
+  "usingComponents": {
+    "message-image-card": "../message-image-card/index",
+    "message-rich": "../message-rich/index"
+  }
+}
