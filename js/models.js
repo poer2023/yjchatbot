@@ -29,8 +29,8 @@ export const models = [
   },
   {
     id: "deepseek",
-    name: "DeepSeek",
-    shortName: "DS",
+    name: "涌见AI",
+    shortName: "YJ",
     description: "偏技术实现，适合讲 mock 数据流和代码结构。",
     accent: "#245f8f",
     accentSoft: "#dce8f5",

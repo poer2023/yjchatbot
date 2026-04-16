@@ -1,3 +1,6 @@
+const CHAT_FONT_FAMILY =
+  "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', 'Microsoft YaHei', sans-serif";
+
 function getPalette(theme) {
   if (theme === "graphite") {
     return {
@@ -12,13 +15,13 @@ function getPalette(theme) {
     };
   }
   return {
-    text: "#231f1b",
-    muted: "#675f57",
-    heading: "#1b1815",
-    border: "rgba(35, 31, 27, 0.1)",
-    soft: "rgba(35, 31, 27, 0.04)",
-    strong: "rgba(31, 141, 114, 0.12)",
-    codeBackground: "#f4f1ea",
+    text: "#1a1a1a",
+    muted: "#555b66",
+    heading: "#1a1a1a",
+    border: "rgba(26, 26, 26, 0.08)",
+    soft: "rgba(26, 26, 26, 0.04)",
+    strong: "rgba(26, 26, 26, 0.06)",
+    codeBackground: "#f4f4f5",
     codeText: "#17304a",
   };
 }
@@ -27,13 +30,38 @@ function textNode(text) {
   return { type: "text", text };
 }
 
+function inlineNodes(text) {
+  const source = String(text || "");
+  const parts = [];
+  const regex = /\*\*([^*]+)\*\*/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(source)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(textNode(source.slice(lastIndex, match.index)));
+    }
+    parts.push({
+      name: "strong",
+      attrs: {
+        style: "font-weight: 650; color: inherit;",
+      },
+      children: [textNode(match[1])],
+    });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < source.length) {
+    parts.push(textNode(source.slice(lastIndex)));
+  }
+  return parts.length ? parts : [textNode(source)];
+}
+
 function paragraphNode(text, palette) {
   return {
     name: "p",
     attrs: {
-      style: `margin: 0 0 12px; color: ${palette.text}; line-height: 1.7; font-size: 15px;`,
+      style: `margin: 0 0 calc(14 * var(--u)); color: ${palette.text}; line-height: 1.78; font-size: calc(28 * var(--u)); font-weight: 400; font-family: ${CHAT_FONT_FAMILY}; letter-spacing: 0.01em;`,
     },
-    children: [textNode(text)],
+    children: inlineNodes(text),
   };
 }
 
@@ -41,9 +69,9 @@ function headingNode(text, palette) {
   return {
     name: "h3",
     attrs: {
-      style: `margin: 0 0 12px; color: ${palette.heading}; font-size: 16px; font-weight: 700; line-height: 1.4;`,
+      style: `margin: calc(4 * var(--u)) 0 calc(10 * var(--u)); color: ${palette.heading}; font-size: calc(32 * var(--u)); font-weight: 650; line-height: 1.45; font-family: ${CHAT_FONT_FAMILY}; letter-spacing: 0.01em;`,
     },
-    children: [textNode(text)],
+    children: inlineNodes(text),
   };
 }
 
@@ -51,14 +79,14 @@ function listNode(items, palette, ordered) {
   return {
     name: ordered ? "ol" : "ul",
     attrs: {
-      style: `margin: 0 0 12px; padding-left: 18px; color: ${palette.text};`,
+      style: `margin: 0 0 calc(14 * var(--u)); padding-left: calc(34 * var(--u)); color: ${palette.text}; font-family: ${CHAT_FONT_FAMILY};`,
     },
     children: items.map((item) => ({
       name: "li",
       attrs: {
-        style: "margin: 0 0 8px; line-height: 1.65; font-size: 15px;",
+        style: `margin: 0 0 calc(10 * var(--u)); line-height: 1.78; font-size: calc(28 * var(--u)); letter-spacing: 0.01em;`,
       },
-      children: [textNode(item)],
+      children: inlineNodes(item),
     })),
   };
 }
@@ -67,13 +95,13 @@ function codeNode(text, palette) {
   return {
     name: "pre",
     attrs: {
-      style: `margin: 0 0 12px; padding: 14px; border-radius: 14px; border: 1px solid ${palette.border}; background: ${palette.codeBackground}; color: ${palette.codeText}; font-size: 13px; line-height: 1.65; white-space: pre-wrap; word-break: break-all;`,
+      style: `margin: 0 0 calc(14 * var(--u)); padding: calc(18 * var(--u)); border-radius: calc(16 * var(--u)); border: 1px solid ${palette.border}; background: ${palette.codeBackground}; color: ${palette.codeText}; font-size: calc(24 * var(--u)); line-height: 1.65; white-space: pre-wrap; word-break: break-all;`,
     },
     children: [
       {
         name: "code",
         attrs: {
-          style: "font-family: Menlo, Monaco, monospace;",
+          style: "font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;",
         },
         children: [textNode(text)],
       },

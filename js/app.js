@@ -1,21 +1,11 @@
 import * as mockChat from "./mock-chat.js";
 import { models, modelMap } from "./models.js";
-import { markdownToHtml } from "./rich-text.js";
+import { markdownToHtml } from "./rich-text.js?v=20260417-chat-8";
 import { getThemeClass, getThemeLabel, getTypingSpeedLabel } from "./helpers.js";
 
 const ICON = "./assets/icons";
 
-const MODE_CONFIG = {
-  expert: { hint: "适合复杂问题，输出更完整", modelId: "claude", title: "研究模式" },
-  quick: { hint: "适合日常咨询，即时响应", modelId: "chatgpt", title: "咨询模式" },
-};
-
-const ATTACH_ACTION_OPTIONS_EXPERT = [
-  { key: "pick-file", label: "选择文件" },
-  { key: "pick-album-image", label: "选择相册中的图片" },
-];
-
-const ATTACH_ACTION_OPTIONS_QUICK = [{ key: "pick-album-image", label: "选择相册中的图片" }];
+const ATTACH_ACTION_OPTIONS = [{ key: "pick-album-image", label: "选择相册中的图片" }];
 const SESSION_ACTION_OPTIONS = [
   { key: "rename-session", label: "重命名" },
   { key: "delete-session", label: "删除" },
@@ -44,7 +34,7 @@ const MOCK_SOURCE_LINKS = [
 ];
 
 function getAttachActionOptionsByMode(modeId) {
-  return modeId === "quick" ? ATTACH_ACTION_OPTIONS_QUICK : ATTACH_ACTION_OPTIONS_EXPERT;
+  return ATTACH_ACTION_OPTIONS;
 }
 
 function formatHistoryGroup(timestamp) {
@@ -79,7 +69,7 @@ function groupSessionsByMonth(sessions, messagesBySession) {
 }
 
 function inferModeFromModel(modelId) {
-  return modelId === "claude" ? "expert" : "quick";
+  return "quick";
 }
 
 function escapeHtml(s) {
@@ -114,9 +104,10 @@ const ui = {
   headerSafeHeight: 44,
   historyGroups: [],
   inputPlaceholder: "想了解什么知识，快来问问我！",
-  isLoggedIn: true,
+  isLoggedIn: false,
   isResponding: false,
   languageLabel: "简体中文",
+  loginAgreementAccepted: false,
   keyboardVisible: false,
   inappSettingsPage: "main",
   messages: [],
@@ -181,11 +172,8 @@ function getCurrentState(sessionId) {
 }
 
 function applySnapshot(snapshot) {
-  const currentMode = inferModeFromModel(
-    snapshot.currentSession ? snapshot.currentSession.modelId : snapshot.state.settings.defaultModelId
-  );
   Object.assign(ui, {
-    activeMode: currentMode,
+    activeMode: "quick",
     activeSessionId: snapshot.currentSession ? snapshot.currentSession.id : "",
     currentModel: snapshot.currentModel,
     historyGroups: groupSessionsByMonth(snapshot.state.sessions, snapshot.state.messagesBySession),
@@ -399,32 +387,58 @@ function renderMessageBubble(message) {
 }
 
 function renderChat() {
-  const welcomeClass = ui.showWelcome ? "message-stack-welcome" : "";
-  const messagesHtml = (ui.messages || [])
-    .map(
-      (m) =>
-        `<div id="msg-${escapeAttr(m.id)}" class="message-anchor">${renderMessageBubble(m)}</div>`
-    )
-    .join("");
+  const showLoginStage = ui.isLoggedIn === false;
+  const showHomeStage = !showLoginStage && ui.messages.length === 0;
+  const stageClass = `${showLoginStage || showHomeStage ? "message-stack-welcome" : ""} ${
+    showHomeStage ? "message-stack-home" : ""
+  }`.trim();
+  const messagesHtml = showLoginStage
+    ? ""
+    : (ui.messages || [])
+        .map(
+          (m) =>
+            `<div id="msg-${escapeAttr(m.id)}" class="message-anchor">${renderMessageBubble(m)}</div>`
+        )
+        .join("");
 
-  const modeCaption = ui.activeMode === "quick" ? "适合日常法律问题咨询，获取可靠建议" : "适合深度研究法律学术问题";
-
-  const welcomeBlock = ui.showWelcome
-    ? `<div class="welcome-stage">
-        <div class="welcome-logo"><img class="welcome-logo-icon" src="./assets/images/welcome-balance.png" alt="" /></div>
-        <div class="welcome-title">使用${ui.activeMode === "quick" ? "咨询" : "研究"}模式开始对话</div>
-        <div class="mode-switch">
-          <button type="button" class="mode-pill ${ui.activeMode === "quick" ? "mode-pill-active" : ""}" data-action="mode" data-mode="quick">
-            <img class="mode-icon" src="${ICON}/flash.svg" alt="" /><span>咨询模式</span>
-          </button>
-          <button type="button" class="mode-pill ${ui.activeMode === "expert" ? "mode-pill-active" : ""}" data-action="mode" data-mode="expert">
-            <img class="mode-icon" src="${ICON}/compass.svg" alt="" /><span>研究模式</span>
-          </button>
+  const loginBlock = showLoginStage
+    ? `<section class="login-stage">
+        <div class="login-brand-row">
+          <div class="login-brand-logo">
+            <img class="login-brand-logo-icon" src="./assets/images/welcome-balance.png" alt="涌见AI logo" />
+          </div>
+          <div class="login-brand-copy">
+            <h1 class="login-title">嗨，我是涌见AI</h1>
+          </div>
         </div>
-        <div class="mode-caption">${escapeHtml(modeCaption)}</div>
-      </div>`
+        <p class="login-intro">
+          您的专属 AI 法律顾问，7×24 小时在线，提供专业法律咨询。
+        </p>
+        <div class="login-feature-list" aria-label="功能说明">
+          <div class="login-feature-item"><strong>语音对话：</strong><span>自然语言交流，快速理清案情</span></div>
+          <div class="login-feature-item"><strong>智能检索：</strong><span>覆盖法律法规与司法案例</span></div>
+          <div class="login-feature-item"><strong>法律意见书：</strong><span>出具专家级咨询意见</span></div>
+          <div class="login-feature-item"><strong>技术支持：</strong><span>北大法律人工智能实验室</span></div>
+        </div>
+        <div class="login-actions">
+          <button type="button" class="login-button login-button-primary" data-action="settings-row" data-settings="mock-login">
+            手机号一键登录
+          </button>
+          <button type="button" class="login-button login-button-secondary" data-action="login-cancel">取消</button>
+        </div>
+        <div class="login-agreement ${ui.loginAgreementAccepted ? "login-agreement-checked" : ""}">
+          <button type="button" class="login-agreement-toggle" data-action="toggle-login-agreement" aria-label="同意协议">
+            <span class="login-agreement-indicator" aria-hidden="true"></span>
+          </button>
+          <span>我已阅读并同意 <button type="button" class="login-inline-link" data-action="settings-row" data-settings="user-agreement">用户协议</button> 与 <button type="button" class="login-inline-link" data-action="settings-row" data-settings="privacy-policy">隐私政策</button></span>
+        </div>
+        <div class="login-footer-links">
+          <button type="button" class="login-footer-link" data-action="login-code">验证码登录</button>
+          <button type="button" class="login-footer-link" data-action="login-password">密码登录</button>
+        </div>
+        <p class="login-footer-note">若您没有涌见AI账号，登录后会自动创建</p>
+      </section>`
     : "";
-
   const drawerGroups = (ui.historyGroups || [])
     .map((group) => {
       const items = group.items
@@ -598,8 +612,8 @@ function renderChat() {
         <div class="capsule-popup-app-card">
           <span class="capsule-popup-app-icon">🐋</span>
           <span class="capsule-popup-app-meta">
-            <span class="capsule-popup-app-name">DeepSeek <span class="capsule-popup-app-arrow">›</span></span>
-            <span class="capsule-popup-app-sub">杭州深度求索人工智能基础技术研究有限公司</span>
+            <span class="capsule-popup-app-name">涌见AI <span class="capsule-popup-app-arrow">›</span></span>
+            <span class="capsule-popup-app-sub">涌见智能助手演示版本</span>
           </span>
         </div>
         <div class="capsule-popup-actions-row">
@@ -691,27 +705,60 @@ function renderChat() {
           </button>
         </div>`;
 
+  const sessionToolbarButtons = showLoginStage
+    ? ""
+    : `<button type="button" class="session-toolbar-btn" data-action="new-session" aria-label="新会话">
+        <img class="session-toolbar-icon" src="${ICON}/compose.svg" alt="" />
+        <span>新会话</span>
+      </button>
+      <button type="button" class="session-toolbar-btn" data-action="open-drawer" aria-label="历史记录">
+        <img class="session-toolbar-icon" src="${ICON}/storage.svg" alt="" />
+        <span>历史记录</span>
+      </button>`;
+
+  const hasChatMessages = (ui.messages || []).length > 0;
+  const sessionToolbarChat =
+    !showLoginStage && hasChatMessages
+      ? `<div class="session-toolbar session-toolbar--chat" role="toolbar" aria-label="会话快捷操作">${sessionToolbarButtons}</div>`
+      : "";
+
+  const homeBlock = showHomeStage
+    ? `<section class="home-stage">
+        <div class="home-brand-row">
+          <div class="home-brand-logo">
+            <img class="home-brand-logo-icon" src="./assets/images/welcome-balance.png" alt="涌见AI logo" />
+          </div>
+          <div class="home-brand-copy">
+            <h2 class="home-title">你好，我是涌见AI法律顾问</h2>
+            <p class="home-intro">专注为您解答法律咨询，用通俗的语言讲清问题要点，给出可参考的处理思路。</p>
+            <p class="home-intro-sub">7×24 小时在线 · 北大法律人工智能实验室技术支持</p>
+          </div>
+        </div>
+        <div class="home-composer-card">
+          <div class="home-input-wrap">${inputAreaHtml}</div>
+        </div>
+        <p class="home-footer-note">内容由 AI 生成，仅供参考</p>
+      </section>`
+    : "";
+
   return `
   <div class="chat-page">
     <div class="chat-shell ${ui.keyboardVisible ? "chat-shell-keyboard-visible" : ""}">
       <header class="chat-header">
         <div class="header-safe" style="height:${ui.headerSafeHeight}px"></div>
         <div class="header-row" style="height:${ui.navBarHeight}px;padding-left:${ui.headerEdgePadding}px">
-          <div class="header-left-actions">
-            <button type="button" class="nav-icon-button" data-action="open-drawer" aria-label="菜单">
-              <span class="menu-bars"><span class="menu-bar menu-bar-top"></span><span class="menu-bar menu-bar-bottom"></span></span>
-            </button>
-            <button type="button" class="nav-icon-button" data-action="new-session" aria-label="新对话">
-              <img class="compose-icon" src="${ICON}/compose.svg" alt="" />
-            </button>
+          <div class="header-left-actions ${showLoginStage ? "header-left-actions-hidden" : ""}">
+            ${
+              showLoginStage
+                ? ""
+                : `<button type="button" class="nav-icon-button" data-action="open-drawer" aria-label="菜单">
+                    <span class="menu-bars"><span class="menu-bar menu-bar-top"></span><span class="menu-bar menu-bar-bottom"></span></span>
+                  </button>`
+            }
           </div>
           <div class="header-center" style="left:${ui.titleSafeLeft}px;right:${ui.titleSafeRight}px">
             <span class="header-title">
               <span>涌见AI</span>
-              <span class="header-title-dot">·</span>
-              <span class="header-title-mode ${ui.activeMode === "expert" ? "header-title-mode-expert" : "header-title-mode-quick"}">
-                ${ui.activeMode === "expert" ? "研究模式" : "咨询模式"}
-              </span>
             </span>
           </div>
           <div class="header-capsule" style="right:${ui.capsuleRight}px;width:${ui.capsuleWidth}px;height:${ui.capsuleHeight}px">
@@ -728,14 +775,16 @@ function renderChat() {
 
       <div class="chat-scroll" id="chat-scroll">
         <span class="drawer-scroll-indicator chat-scroll-indicator" aria-hidden="true"></span>
-        <div class="message-stack ${welcomeClass}">
+        <div class="message-stack ${stageClass}">
           <div id="welcome-anchor"></div>
-          ${welcomeBlock}
+          ${loginBlock}
+          ${homeBlock}
           ${messagesHtml}
         </div>
       </div>
 
-      <div class="chat-input">
+      <div class="chat-input ${showLoginStage || showHomeStage ? "chat-input-hidden" : ""}">
+        ${sessionToolbarChat}
         ${voiceWaveSectionTop}
         ${searchChipsSection}
         ${inputAreaHtml}
@@ -981,7 +1030,6 @@ function mount() {
   const root = document.getElementById("app-root");
   if (!root) return;
   root.classList.toggle("device-screen-keyboard-visible", getRoute() !== "app-settings" && !!ui.keyboardVisible);
-  cancelPendingPlayback();
   if (getRoute() === "app-settings") {
     refreshFromService(false);
     if (ui.isLoggedIn === false) {
@@ -1782,6 +1830,7 @@ function bindChat(root) {
       }
 
       const stubTitles = {
+        thinking: "深度思考已开启",
         voice: "语音输入模式已开启",
       };
       if (stubTitles[kind]) {
@@ -1817,6 +1866,23 @@ function bindChat(root) {
     }
     if (action === "send") {
       await doSend();
+      return;
+    }
+    if (action === "toggle-login-agreement") {
+      ui.loginAgreementAccepted = !ui.loginAgreementAccepted;
+      mount();
+      return;
+    }
+    if (action === "login-cancel") {
+      showToast("取消登录");
+      return;
+    }
+    if (action === "login-code") {
+      showToast("验证码登录暂未接入");
+      return;
+    }
+    if (action === "login-password") {
+      showToast("密码登录暂未接入");
       return;
     }
     if (action === "settings-row") {
@@ -1855,8 +1921,14 @@ async function doSend() {
 
 function handleSettingsRow(key) {
   if (key === "mock-login") {
+    if (!ui.loginAgreementAccepted) {
+      showToast("请先勾选用户协议与隐私政策");
+      return;
+    }
     mockChat.updateSettings({ loggedIn: true });
     ui.isLoggedIn = true;
+    ui.draft = "";
+    ui.showWelcome = true;
     showToast("已登录（Mock）");
     mount();
     return;
@@ -1914,6 +1986,7 @@ function handleSettingsRow(key) {
     mockChat.updateSettings({ loggedIn: false });
     ui.isLoggedIn = false;
     ui.inappSettingsPage = "main";
+    ui.draft = "";
     showToast("已退出登录（Mock）");
     mount();
   }
@@ -1942,7 +2015,9 @@ function tickClock() {
 
 function init() {
   mockChat.bootstrap(true);
+  mockChat.updateSettings({ loggedIn: false, showWelcome: true });
   refreshFromService(false);
+  ui.draft = "";
   initLayout();
   window.addEventListener("resize", () => {
     initLayout();

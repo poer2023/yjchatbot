@@ -5,7 +5,7 @@ import { clamp, deepClone, truncateText } from "./helpers.js";
 
 const DEFAULT_SETTINGS = {
   defaultModelId,
-  loggedIn: true,
+  loggedIn: false,
   persistHistory: true,
   showWelcome: true,
   theme: "light",
