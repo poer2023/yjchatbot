@@ -838,19 +838,33 @@ body::after {
 }
 
 .login-stage {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;
-  padding: calc(48 * var(--u)) calc(28 * var(--u)) calc(18 * var(--u));
+  padding: calc(48 * var(--u)) calc(28 * var(--u)) calc(120 * var(--u));
+}
+
+.login-stage-upper {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.login-stage-spacer {
+  flex: 1.6 1 auto;
+  min-height: calc(40 * var(--u));
 }
 
 .login-brand-row {
   display: flex;
   align-items: center;
   gap: calc(18 * var(--u));
-  padding: calc(72 * var(--u)) calc(6 * var(--u)) 0;
+  padding: 0 calc(6 * var(--u));
 }
 
 .login-brand-logo {
@@ -939,7 +953,7 @@ body::after {
   display: flex;
   flex-direction: column;
   gap: calc(18 * var(--u));
-  margin-top: calc(76 * var(--u));
+  margin-top: calc(36 * var(--u));
   padding: 0;
 }
 
@@ -1061,10 +1075,12 @@ body::after {
 }
 
 .login-footer-note {
-  flex-shrink: 0;
-  margin-top: auto;
-  margin-bottom: 0;
-  padding-bottom: 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(26 * var(--u));
+  margin: 0;
+  padding: 0;
   color: var(--login-text-tertiary);
   font-size: calc(20 * var(--u));
   line-height: 1.5;

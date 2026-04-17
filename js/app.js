@@ -401,25 +401,25 @@ function renderChat() {
 
   const loginBlock = showLoginStage
     ? `<section class="login-stage">
-        <div class="login-brand-row">
-          <div class="login-brand-logo">
-            <img class="login-brand-logo-icon" src="./assets/images/welcome-balance.png" alt="涌见AI logo" />
+        <div class="login-stage-upper">
+          <div class="login-brand-row">
+            <div class="login-brand-logo">
+              <img class="login-brand-logo-icon" src="./assets/images/welcome-balance.png" alt="涌见AI logo" />
+            </div>
+            <div class="login-brand-copy">
+              <h1 class="login-title">您好，我是您的AI法律顾问</h1>
+            </div>
           </div>
-          <div class="login-brand-copy">
-            <h1 class="login-title">您好，我是您的AI法律顾问</h1>
-            <p class="login-intro">7x24小时，随时在线</p>
+          <div class="login-feature-list" aria-label="功能说明">
+            <div class="login-feature-item"><strong>案情咨询：</strong><span>自然语言对话，了解案情</span></div>
+            <div class="login-feature-item"><strong>法律搜索：</strong><span>搜索法律法规及相似司法案例</span></div>
+            <div class="login-feature-item"><strong>出具意见：</strong><span>深入分析，生成法律意见书</span></div>
           </div>
-        </div>
-        <div class="login-feature-list" aria-label="功能说明">
-          <div class="login-feature-item"><strong>案情咨询：</strong><span>自然语言对话，了解案情</span></div>
-          <div class="login-feature-item"><strong>法律搜索：</strong><span>搜索法律法规及相似司法案例</span></div>
-          <div class="login-feature-item"><strong>出具意见：</strong><span>深入分析，生成法律意见书</span></div>
         </div>
         <div class="login-actions">
           <button type="button" class="login-button login-button-primary" data-action="settings-row" data-settings="mock-login">
             微信授权登录
           </button>
-          <button type="button" class="login-button login-button-secondary" data-action="login-cancel">取消</button>
         </div>
         <div class="login-agreement ${ui.loginAgreementAccepted ? "login-agreement-checked" : ""}">
           <button type="button" class="login-agreement-toggle" data-action="toggle-login-agreement" aria-label="同意协议">
@@ -427,6 +427,7 @@ function renderChat() {
           </button>
           <span>我已阅读并同意 <button type="button" class="login-inline-link" data-action="settings-row" data-settings="user-agreement">用户协议</button> 与 <button type="button" class="login-inline-link" data-action="settings-row" data-settings="privacy-policy">隐私政策</button></span>
         </div>
+        <div class="login-stage-spacer" aria-hidden="true"></div>
         <p class="login-footer-note">北大法律人工智能实验室提供技术支持</p>
       </section>`
     : "";
@@ -711,16 +712,15 @@ function renderChat() {
             </div>
             <div class="login-brand-copy">
               <h2 class="login-title">您好，我是您的AI法律顾问</h2>
-              <p class="home-intro-sub">7×24 小时在线</p>
             </div>
           </div>
-          <p class="login-intro">我会问几个具体问题帮您梳理案情，然后再出具法律意见书。耐心聊完，结果更准确喔~</p>
+          <p class="login-intro">我会先问您几个具体问题，了解清楚案情，然后再出具法律意见书。耐心聊完，结果更准确喔~</p>
         </div>
         <div class="home-composer-card">
           <div class="home-input-wrap">${inputAreaHtml}</div>
         </div>
         <div class="home-stage-spacer" aria-hidden="true"></div>
-        <p class="login-footer-note">北大法律人工智能实验室技术支持</p>
+        <p class="login-footer-note">北大法律人工智能实验室提供技术支持</p>
       </section>`
     : "";
 
@@ -748,7 +748,7 @@ function renderChat() {
           </div>
           <div class="header-center" style="left:${ui.titleSafeLeft}px;right:${ui.titleSafeRight}px">
             <span class="header-title">
-              <span>弥渡县司法局</span>
+              <span>弥渡AI法律顾问</span>
             </span>
           </div>
           <div class="header-capsule" style="right:${ui.capsuleRight}px;width:${ui.capsuleWidth}px;height:${ui.capsuleHeight}px">
@@ -1864,10 +1864,6 @@ function bindChat(root) {
     if (action === "toggle-login-agreement") {
       ui.loginAgreementAccepted = !ui.loginAgreementAccepted;
       mount();
-      return;
-    }
-    if (action === "login-cancel") {
-      showToast("取消登录");
       return;
     }
     if (action === "login-code") {
