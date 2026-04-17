@@ -87,7 +87,7 @@ function escapeAttr(s) {
 }
 
 const DEFAULT_INPUT_PLACEHOLDER = "输入问题，开始咨询吧~";
-const LONG_CHAT_INPUT_PLACEHOLDER = "耐心聊完更准，发送“1”直接出结论";
+const LONG_CHAT_INPUT_PLACEHOLDER = "耐心聊完更准确，发送“1”直接获取结论";
 
 function countCompletedDialogRounds(messages) {
   const list = Array.isArray(messages) ? messages : [];
