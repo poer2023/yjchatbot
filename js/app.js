@@ -84,6 +84,45 @@ function escapeAttr(s) {
   return escapeHtml(s).replace(/'/g, "&#39;");
 }
 
+const DEFAULT_INPUT_PLACEHOLDER = "输入问题，开始咨询吧~";
+const LONG_CHAT_INPUT_PLACEHOLDER = "耐心聊完更准，输1直接出结果";
+
+function countCompletedDialogRounds(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  let rounds = 0;
+  for (let i = 0; i < list.length; i += 1) {
+    const cur = list[i];
+    if (!cur || cur.role !== "user") {
+      continue;
+    }
+    for (let j = i + 1; j < list.length; j += 1) {
+      const next = list[j];
+      if (!next) {
+        break;
+      }
+      if (next.role === "user") {
+        break;
+      }
+      if (next.role !== "assistant") {
+        continue;
+      }
+      if (next.type === "typing") {
+        continue;
+      }
+      if (next.status && next.status !== "done") {
+        continue;
+      }
+      rounds += 1;
+      break;
+    }
+  }
+  return rounds;
+}
+
+function getChatDraftPlaceholder(messages) {
+  return countCompletedDialogRounds(messages) > 3 ? LONG_CHAT_INPUT_PLACEHOLDER : ui.inputPlaceholder;
+}
+
 const ui = {
   activeMode: "quick",
   activeSessionId: "",
@@ -103,7 +142,7 @@ const ui = {
   headerPadTop: 48,
   headerSafeHeight: 44,
   historyGroups: [],
-  inputPlaceholder: "想了解什么知识，快来问问我！",
+  inputPlaceholder: DEFAULT_INPUT_PLACEHOLDER,
   isLoggedIn: false,
   isResponding: false,
   languageLabel: "简体中文",
@@ -131,6 +170,7 @@ const ui = {
   voiceMode: false,
   voicePressActive: false,
   voicePressCancel: false,
+  voiceToTextActive: false,
   showCapsuleMenu: false,
   showDrawer: false,
   showSettingsSheet: false,
@@ -256,47 +296,6 @@ function enhanceRichSourceTrigger(html, messageId) {
   );
 }
 
-function escapePdfText(input) {
-  return String(input || "")
-    .replace(/\\/g, "\\\\")
-    .replace(/\(/g, "\\(")
-    .replace(/\)/g, "\\)");
-}
-
-function buildMockPdfBlob(lines) {
-  const normalizedLines = (lines || []).slice(0, 24).map((line) => escapePdfText(line));
-  const stream = [
-    "BT",
-    "/F1 12 Tf",
-    "14 TL",
-    "50 790 Td",
-    ...normalizedLines.map((line, index) => `${index === 0 ? "" : "T* " }(${line}) Tj`),
-    "ET",
-  ].join("\n");
-  const objects = [
-    null,
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
-  ];
-
-  let pdf = "%PDF-1.4\n";
-  const offsets = [];
-  for (let i = 1; i < objects.length; i += 1) {
-    offsets[i] = pdf.length;
-    pdf += `${i} 0 obj\n${objects[i]}\nendobj\n`;
-  }
-  const xrefStart = pdf.length;
-  pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
-  for (let i = 1; i < objects.length; i += 1) {
-    pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
-  }
-  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
-  return new Blob([pdf], { type: "application/pdf" });
-}
-
 function renderMessageBubble(message) {
   const theme = ui.settings.theme || "light";
   const isUser = message.role === "user";
@@ -359,16 +358,15 @@ function renderMessageBubble(message) {
   } else if (message.type === "file-card") {
     const file = message.extra?.file || {};
     inner = `
-      <button type="button" class="file-card" data-action="download-file-card" data-message-id="${escapeAttr(message.id)}">
-        <span class="file-card-icon">PDF</span>
+      <div class="file-card" role="group" aria-label="PDF 附件">
         <span class="file-card-main">
           <span class="file-card-title">${escapeHtml(file.fileName || message.content || "会话文档.pdf")}</span>
-          <span class="file-card-meta">${escapeHtml(file.fileSize || "128 KB")} · ${escapeHtml(
-            file.description || "点击可下载"
+          <span class="file-card-meta">${escapeHtml(file.fileSize || "128 KB")}\u00a0\u00a0${escapeHtml(
+            file.description || "未下载"
           )}</span>
         </span>
-        <span class="file-card-download">${escapeHtml(file.downloadLabel || "下载")}</span>
-      </button>`;
+        <span class="file-card-icon" aria-hidden="true"><span class="file-card-icon-label">PDF</span></span>
+      </div>`;
   }
 
   const bubbleClass =
@@ -408,21 +406,18 @@ function renderChat() {
             <img class="login-brand-logo-icon" src="./assets/images/welcome-balance.png" alt="涌见AI logo" />
           </div>
           <div class="login-brand-copy">
-            <h1 class="login-title">嗨，我是涌见AI</h1>
+            <h1 class="login-title">您好，我是您的AI法律顾问</h1>
+            <p class="login-intro">7x24小时，随时在线</p>
           </div>
         </div>
-        <p class="login-intro">
-          您的专属 AI 法律顾问，7×24 小时在线，提供专业法律咨询。
-        </p>
         <div class="login-feature-list" aria-label="功能说明">
-          <div class="login-feature-item"><strong>语音对话：</strong><span>自然语言交流，快速理清案情</span></div>
-          <div class="login-feature-item"><strong>智能检索：</strong><span>覆盖法律法规与司法案例</span></div>
-          <div class="login-feature-item"><strong>法律意见书：</strong><span>出具专家级咨询意见</span></div>
-          <div class="login-feature-item"><strong>技术支持：</strong><span>北大法律人工智能实验室</span></div>
+          <div class="login-feature-item"><strong>案情咨询：</strong><span>自然语言对话，了解案情</span></div>
+          <div class="login-feature-item"><strong>法律搜索：</strong><span>搜索法律法规及相似司法案例</span></div>
+          <div class="login-feature-item"><strong>出具意见：</strong><span>深入分析，生成法律意见书</span></div>
         </div>
         <div class="login-actions">
           <button type="button" class="login-button login-button-primary" data-action="settings-row" data-settings="mock-login">
-            手机号一键登录
+            微信授权登录
           </button>
           <button type="button" class="login-button login-button-secondary" data-action="login-cancel">取消</button>
         </div>
@@ -432,11 +427,7 @@ function renderChat() {
           </button>
           <span>我已阅读并同意 <button type="button" class="login-inline-link" data-action="settings-row" data-settings="user-agreement">用户协议</button> 与 <button type="button" class="login-inline-link" data-action="settings-row" data-settings="privacy-policy">隐私政策</button></span>
         </div>
-        <div class="login-footer-links">
-          <button type="button" class="login-footer-link" data-action="login-code">验证码登录</button>
-          <button type="button" class="login-footer-link" data-action="login-password">密码登录</button>
-        </div>
-        <p class="login-footer-note">若您没有涌见AI账号，登录后会自动创建</p>
+        <p class="login-footer-note">北大法律人工智能实验室提供技术支持</p>
       </section>`
     : "";
   const drawerGroups = (ui.historyGroups || [])
@@ -504,6 +495,7 @@ function renderChat() {
     (ui.voicePressActive ? " voice-hold-btn-recording" : "") +
     (ui.voicePressCancel ? " voice-hold-btn-cancel" : "");
   const voiceHoldText = ui.voicePressCancel ? "松手 取消" : "按住 说话";
+  const chatDraftPlaceholder = getChatDraftPlaceholder(ui.messages || []);
   const commonSheetOptionsHtml = (ui.commonSheetOptions || [])
     .map(
       (item, index, list) => `
@@ -677,16 +669,19 @@ function renderChat() {
           <button type="button" class="input-mic-wrap" data-action="stub" data-kind="voice" aria-label="语音输入" ${
             ui.isResponding ? "disabled" : ""
           }>
-            <img class="input-mic-icon" src="${ICON}/mic.svg" alt="" />
+            <img class="input-mic-icon" src="${ICON}/voice-wave.svg" alt="" />
           </button>
           <textarea class="chat-textarea-flex" id="chat-draft" maxlength="2000" rows="1"
-            placeholder="${escapeAttr(ui.inputPlaceholder)}" ${ui.isResponding ? "disabled" : ""}>${escapeHtml(
+            placeholder="${escapeAttr(chatDraftPlaceholder)}" ${ui.isResponding ? "disabled" : ""}>${escapeHtml(
               ui.draft
             )}</textarea>
           <div class="input-trailing-actions">
+            <button type="button" class="input-circle-btn input-circle-voice${ui.voiceToTextActive ? " input-circle-voice-active" : ""}" data-action="toggle-voice-to-text" aria-label="语音转文字" ${
+              ui.isResponding ? "disabled" : ""
+            }><img class="input-voice-icon" src="${ICON}/mic.svg" alt="" /></button>
             <button type="button" class="input-circle-btn input-circle-plus" data-action="stub" data-kind="attach" aria-label="附件" ${
               ui.isResponding ? "disabled" : ""
-            }><span class="input-plus-glyph">+</span></button>
+            }><img class="input-plus-icon" src="${ICON}/attach-image.svg" alt="" /></button>
             <button type="button" class="${sendCircleClass}" data-action="send" aria-label="发送" ${ui.isResponding ? "disabled" : ""}>
               ${sendInner}
             </button>
@@ -705,39 +700,27 @@ function renderChat() {
           </button>
         </div>`;
 
-  const sessionToolbarButtons = showLoginStage
-    ? ""
-    : `<button type="button" class="session-toolbar-btn" data-action="new-session" aria-label="新会话">
-        <img class="session-toolbar-icon" src="${ICON}/compose.svg" alt="" />
-        <span>新会话</span>
-      </button>
-      <button type="button" class="session-toolbar-btn" data-action="open-drawer" aria-label="历史记录">
-        <img class="session-toolbar-icon" src="${ICON}/storage.svg" alt="" />
-        <span>历史记录</span>
-      </button>`;
-
-  const hasChatMessages = (ui.messages || []).length > 0;
-  const sessionToolbarChat =
-    !showLoginStage && hasChatMessages
-      ? `<div class="session-toolbar session-toolbar--chat" role="toolbar" aria-label="会话快捷操作">${sessionToolbarButtons}</div>`
-      : "";
+  const sessionToolbarChat = "";
 
   const homeBlock = showHomeStage
     ? `<section class="home-stage">
-        <div class="home-brand-row">
-          <div class="home-brand-logo">
-            <img class="home-brand-logo-icon" src="./assets/images/welcome-balance.png" alt="涌见AI logo" />
+        <div class="home-stage-upper">
+          <div class="login-brand-row">
+            <div class="login-brand-logo">
+              <img class="login-brand-logo-icon" src="./assets/images/welcome-balance.png" alt="涌见AI logo" />
+            </div>
+            <div class="login-brand-copy">
+              <h2 class="login-title">您好，我是您的AI法律顾问</h2>
+              <p class="home-intro-sub">7×24 小时在线</p>
+            </div>
           </div>
-          <div class="home-brand-copy">
-            <h2 class="home-title">你好，我是涌见AI法律顾问</h2>
-            <p class="home-intro">专注为您解答法律咨询，用通俗的语言讲清问题要点，给出可参考的处理思路。</p>
-            <p class="home-intro-sub">7×24 小时在线 · 北大法律人工智能实验室技术支持</p>
-          </div>
+          <p class="login-intro">我会问几个具体问题帮您梳理案情，然后再出具法律意见书。耐心聊完，结果更准确喔~</p>
         </div>
         <div class="home-composer-card">
           <div class="home-input-wrap">${inputAreaHtml}</div>
         </div>
-        <p class="home-footer-note">内容由 AI 生成，仅供参考</p>
+        <div class="home-stage-spacer" aria-hidden="true"></div>
+        <p class="login-footer-note">北大法律人工智能实验室技术支持</p>
       </section>`
     : "";
 
@@ -753,12 +736,19 @@ function renderChat() {
                 ? ""
                 : `<button type="button" class="nav-icon-button" data-action="open-drawer" aria-label="菜单">
                     <span class="menu-bars"><span class="menu-bar menu-bar-top"></span><span class="menu-bar menu-bar-bottom"></span></span>
-                  </button>`
+                  </button>
+                  ${
+                    showHomeStage
+                      ? ""
+                      : `<button type="button" class="header-new-session-btn" data-action="new-session" aria-label="新建会话">
+                          <span class="header-new-session-plus" aria-hidden="true">+</span>
+                        </button>`
+                  }`
             }
           </div>
           <div class="header-center" style="left:${ui.titleSafeLeft}px;right:${ui.titleSafeRight}px">
             <span class="header-title">
-              <span>涌见AI</span>
+              <span>弥渡县司法局</span>
             </span>
           </div>
           <div class="header-capsule" style="right:${ui.capsuleRight}px;width:${ui.capsuleWidth}px;height:${ui.capsuleHeight}px">
@@ -788,9 +778,10 @@ function renderChat() {
         ${voiceWaveSectionTop}
         ${searchChipsSection}
         ${inputAreaHtml}
-        <div class="input-disclaimer">内容由 AI 生成</div>
+        <div class="input-disclaimer">内容由AI生成，仅供参考</div>
       </div>
       ${mockImeHtml}
+      <input id="attach-image-input" type="file" accept="image/*" hidden />
     </div>
 
     ${capsulePopupHtml}
@@ -1273,6 +1264,23 @@ function bindChat(root) {
   };
 
   const ta = root.querySelector("#chat-draft");
+  const attachImageInput = root.querySelector("#attach-image-input");
+  if (attachImageInput) {
+    attachImageInput.addEventListener("change", () => {
+      const file = attachImageInput.files && attachImageInput.files[0];
+      if (!file) {
+        return;
+      }
+      if (!file.type || !file.type.startsWith("image/")) {
+        showToast("仅支持选择图片");
+        attachImageInput.value = "";
+        return;
+      }
+      showToast(`已选择图片：${file.name}`);
+      attachImageInput.value = "";
+    });
+  }
+
   if (ta) {
     ta.addEventListener("focus", () => {
       if (syncingKeyboardFocus) {
@@ -1720,35 +1728,6 @@ function bindChat(root) {
       mount();
       return;
     }
-    if (action === "download-file-card") {
-      const messageId = t.dataset.messageId;
-      const message = (ui.messages || []).find((item) => item.id === messageId);
-      if (!message) {
-        showToast("文件不存在");
-        return;
-      }
-      const file = message.extra?.file || {};
-      const fileName = file.fileName || "会话文档.pdf";
-      const blob = buildMockPdfBlob([
-        "Yongjian AI - Mock PDF Document",
-        `Title: ${message.content || "Conversation Summary"}`,
-        "",
-        "This is a mocked downloadable PDF generated for demo flow.",
-        "Content comes from the current legal consultation session.",
-        "",
-        `Generated at: ${new Date().toLocaleString()}`,
-      ]);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      showToast("PDF 已下载（Mock）");
-      return;
-    }
     if (action === "close-mini-program") {
       ui.showCapsuleMenu = false;
       ui.keyboardVisible = false;
@@ -1761,13 +1740,20 @@ function bindChat(root) {
         showBusyToast();
         return;
       }
-      mockChat.createSession();
+      const createdSession = mockChat.createSession();
+      mockChat.commitAssistantSegment({
+        sessionId: createdSession && createdSession.id,
+        segment: {
+          type: "text",
+          content: "已经帮你开启新对话了，现在输入新的问题吧~",
+        },
+      });
       ui.draft = "";
       ui.showCapsuleMenu = false;
       ui.keyboardVisible = false;
       ui.showDrawer = false;
       ui.showSettingsSheet = false;
-      syncSession();
+      syncSession(createdSession && createdSession.id);
       mount();
       return;
     }
@@ -1845,12 +1831,13 @@ function bindChat(root) {
         return;
       }
       if (kind === "attach") {
-        ui.commonSheetOptions = getAttachActionOptionsByMode(ui.activeMode);
-        ui.commonSheetCancelText = "取消";
-        ui.commonSheetContext = "attach";
-        ui.commonSheetSessionId = "";
-        ui.commonSheetVisible = true;
-        mount();
+        const picker = root.querySelector("#attach-image-input");
+        if (!picker) {
+          showToast("未找到图片选择器");
+          return;
+        }
+        picker.value = "";
+        picker.click();
         return;
       }
       showToast("功能仅做演示");
@@ -1861,6 +1848,12 @@ function bindChat(root) {
       ui.voicePressActive = false;
       ui.voicePressCancel = false;
       ui.keyboardVisible = false;
+      mount();
+      return;
+    }
+    if (action === "toggle-voice-to-text") {
+      ui.voiceToTextActive = !ui.voiceToTextActive;
+      showToast(ui.voiceToTextActive ? "语音转文字已开启（演示）" : "语音转文字已关闭");
       mount();
       return;
     }
@@ -1929,6 +1922,10 @@ function handleSettingsRow(key) {
     ui.isLoggedIn = true;
     ui.draft = "";
     ui.showWelcome = true;
+    if (ui.messages && ui.messages.length > 0) {
+      const freshSession = mockChat.createSession();
+      syncSession(freshSession && freshSession.id);
+    }
     showToast("已登录（Mock）");
     mount();
     return;
@@ -1987,7 +1984,14 @@ function handleSettingsRow(key) {
     ui.isLoggedIn = false;
     ui.inappSettingsPage = "main";
     ui.draft = "";
+    ui.showDrawer = false;
+    ui.showSettingsSheet = false;
+    ui.keyboardVisible = false;
+    ui.showWelcome = true;
+    const freshSession = mockChat.createSession();
+    syncSession(freshSession && freshSession.id);
     showToast("已退出登录（Mock）");
+    location.hash = "#/chat";
     mount();
   }
 }

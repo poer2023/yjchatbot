@@ -172,8 +172,7 @@ function buildLegalSessionMessages(sessionId) {
       {
         ...createAssistantSnapshot("deepseek"),
         file: {
-          description: "基于当前会话内容自动整理，点击即可下载。",
-          downloadLabel: "点击下载",
+          description: "未下载",
           fileName: "诈骗案咨询纪要.pdf",
           fileSize: "242 KB",
         },
