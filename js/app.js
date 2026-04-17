@@ -4,6 +4,8 @@ import { markdownToHtml } from "./rich-text.js?v=20260417-chat-8";
 import { getThemeClass, getThemeLabel, getTypingSpeedLabel } from "./helpers.js";
 
 const ICON = "./assets/icons";
+const USER_AVATAR_URL =
+  "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=240&q=80";
 
 const ATTACH_ACTION_OPTIONS = [{ key: "pick-album-image", label: "选择相册中的图片" }];
 const SESSION_ACTION_OPTIONS = [
@@ -299,11 +301,10 @@ function enhanceRichSourceTrigger(html, messageId) {
 function renderMessageBubble(message) {
   const theme = ui.settings.theme || "light";
   const isUser = message.role === "user";
-  const meta = isUser ? "我" : "涌见AI";
-  const avatar =
-    message.role !== "user"
-      ? `<div class="assistant-avatar"><img class="assistant-avatar-image" src="./assets/images/welcome-balance.png" alt="" /></div>`
-      : "";
+  const meta = isUser ? "我" : "AI法律顾问";
+  const avatar = isUser
+    ? `<div class="user-avatar"><img class="user-avatar-image" src="${USER_AVATAR_URL}" alt="" /></div>`
+    : `<div class="assistant-avatar"><img class="assistant-avatar-image" src="./assets/images/welcome-balance.png" alt="" /></div>`;
 
   let inner = "";
   if (message.type === "text" || (message.type === "rich" && message.status === "streaming")) {
@@ -376,11 +377,12 @@ function renderMessageBubble(message) {
 
   return `
     <div class="message-row ${isUser ? "message-row-user" : ""}">
-      ${avatar}
+      ${isUser ? "" : avatar}
       <div class="message-main ${isUser ? "message-main-user" : ""}">
         <div class="message-meta">${meta}</div>
         <div class="${bubbleClass}">${inner}</div>
       </div>
+      ${isUser ? avatar : ""}
     </div>`;
 }
 
