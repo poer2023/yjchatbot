@@ -301,7 +301,6 @@ function enhanceRichSourceTrigger(html, messageId) {
 function renderMessageBubble(message) {
   const theme = ui.settings.theme || "light";
   const isUser = message.role === "user";
-  const meta = isUser ? "我" : "AI法律顾问";
   const avatar = isUser
     ? `<div class="user-avatar"><img class="user-avatar-image" src="${USER_AVATAR_URL}" alt="" /></div>`
     : `<div class="assistant-avatar"><img class="assistant-avatar-image" src="./assets/images/welcome-balance.png" alt="" /></div>`;
@@ -379,7 +378,6 @@ function renderMessageBubble(message) {
     <div class="message-row ${isUser ? "message-row-user" : ""}">
       ${isUser ? "" : avatar}
       <div class="message-main ${isUser ? "message-main-user" : ""}">
-        <div class="message-meta">${meta}</div>
         <div class="${bubbleClass}">${inner}</div>
       </div>
       ${isUser ? avatar : ""}
