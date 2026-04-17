@@ -1772,8 +1772,8 @@ body::after {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: calc(10 * var(--u));
-  padding: calc(12 * var(--u)) calc(14 * var(--u)) calc(12 * var(--u)) calc(16 * var(--u));
+  gap: calc(8 * var(--u));
+  padding: calc(12 * var(--u)) calc(10 * var(--u)) calc(12 * var(--u)) calc(12 * var(--u));
   border-radius: 999px;
   background: #fff;
   border: 1px solid #e5e9f0;
@@ -1815,7 +1815,7 @@ body::after {
   min-width: 0;
   min-height: calc(48 * var(--u));
   max-height: calc(200 * var(--u));
-  padding: 0 calc(8 * var(--u));
+  padding: 0 calc(2 * var(--u));
   font: inherit;
   font-size: calc(28 * var(--u));
   line-height: calc(48 * var(--u));
@@ -1831,10 +1831,8 @@ body::after {
   color: #a6adb8;
   font-size: calc(22 * var(--u));
   line-height: calc(48 * var(--u));
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
 }
 
 .chat-textarea-flex:disabled {
@@ -1845,7 +1843,7 @@ body::after {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: calc(10 * var(--u));
+  gap: calc(6 * var(--u));
   flex-shrink: 0;
 }
 
@@ -1853,8 +1851,8 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: calc(64 * var(--u));
-  height: calc(64 * var(--u));
+  width: calc(60 * var(--u));
+  height: calc(60 * var(--u));
   border-radius: 50%;
   border: none;
   padding: 0;
@@ -1874,8 +1872,8 @@ body::after {
 
 .input-circle-voice {
   position: relative;
-  width: calc(56 * var(--u));
-  height: calc(56 * var(--u));
+  width: calc(52 * var(--u));
+  height: calc(52 * var(--u));
   min-width: 0;
   min-height: 0;
   border: none;
@@ -1895,8 +1893,8 @@ body::after {
 }
 
 .input-voice-icon {
-  width: calc(36 * var(--u));
-  height: calc(36 * var(--u));
+  width: calc(32 * var(--u));
+  height: calc(32 * var(--u));
   display: block;
   transition: filter 180ms ease;
 }
@@ -1954,8 +1952,8 @@ body::after {
 }
 
 .input-plus-icon {
-  width: calc(58 * var(--u));
-  height: calc(58 * var(--u));
+  width: calc(50 * var(--u));
+  height: calc(50 * var(--u));
   display: block;
 }
 
