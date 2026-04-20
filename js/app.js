@@ -1,6 +1,6 @@
 import * as mockChat from "./mock-chat.js";
 import { models, modelMap } from "./models.js";
-import { markdownToHtml } from "./rich-text.js?v=20260417-chat-8";
+import { markdownToHtml } from "./rich-text.js?v=20260420-chat-9";
 import { getThemeClass, getThemeLabel, getTypingSpeedLabel } from "./helpers.js";
 
 const ICON = "./assets/icons";
@@ -145,6 +145,7 @@ const ui = {
   headerSafeHeight: 44,
   historyGroups: [],
   inputPlaceholder: DEFAULT_INPUT_PLACEHOLDER,
+  authGateVisible: false,
   isLoggedIn: false,
   isResponding: false,
   languageLabel: "简体中文",
@@ -184,6 +185,7 @@ const ui = {
 
 let replyToken = "";
 let timerBag = [];
+let pendingAuthAction = null;
 
 function cancelPendingPlayback() {
   replyToken = "";
@@ -257,6 +259,101 @@ function showToast(title) {
   node.classList.add("toast-visible");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => node.classList.remove("toast-visible"), 2200);
+}
+
+function closeAuthGate() {
+  ui.authGateVisible = false;
+}
+
+function openAuthGate(_reason, pendingAction) {
+  pendingAuthAction = pendingAction || null;
+  ui.authGateVisible = true;
+  ui.showCapsuleMenu = false;
+  ui.showDrawer = false;
+  ui.showSettingsSheet = false;
+  ui.commonSheetVisible = false;
+  ui.commonSheetContext = "";
+  ui.commonSheetSessionId = "";
+  ui.keyboardVisible = false;
+  ui.sourceSheetVisible = false;
+  ui.renameDialogVisible = false;
+  mount();
+}
+
+function requireLogin(reason, pendingAction) {
+  if (ui.isLoggedIn !== false) {
+    return true;
+  }
+  openAuthGate(reason, pendingAction);
+  return false;
+}
+
+function openDrawerPanel() {
+  ui.showCapsuleMenu = false;
+  ui.commonSheetVisible = false;
+  ui.keyboardVisible = false;
+  ui.showDrawer = true;
+  ui.showSettingsSheet = false;
+  mount();
+}
+
+function activateSessionById(sessionId) {
+  if (!sessionId) {
+    return;
+  }
+  mockChat.activateSession(sessionId);
+  ui.draft = "";
+  ui.showCapsuleMenu = false;
+  ui.showDrawer = false;
+  syncSession(sessionId);
+  mount();
+}
+
+function createFreshSession() {
+  const createdSession = mockChat.createSession();
+  mockChat.commitAssistantSegment({
+    sessionId: createdSession && createdSession.id,
+    segment: {
+      type: "text",
+      content: "已经帮你开启新对话了，现在输入新的问题吧~",
+    },
+  });
+  ui.draft = "";
+  ui.showCapsuleMenu = false;
+  ui.keyboardVisible = false;
+  ui.showDrawer = false;
+  ui.showSettingsSheet = false;
+  syncSession(createdSession && createdSession.id);
+  mount();
+}
+
+async function resumePendingAuthAction() {
+  const nextAction = pendingAuthAction;
+  pendingAuthAction = null;
+  if (!nextAction) {
+    return;
+  }
+
+  if (nextAction.type === "send") {
+    ui.draft = nextAction.content || "";
+    mount();
+    await doSend(nextAction.content || "");
+    return;
+  }
+
+  if (nextAction.type === "open-drawer") {
+    openDrawerPanel();
+    return;
+  }
+
+  if (nextAction.type === "pick-session") {
+    activateSessionById(nextAction.sessionId);
+    return;
+  }
+
+  if (nextAction.type === "new-session") {
+    createFreshSession();
+  }
 }
 
 function showBusyToast() {
@@ -385,14 +482,17 @@ function renderMessageBubble(message) {
 }
 
 function renderChat() {
-  const showLoginStage = ui.isLoggedIn === false;
-  const showHomeStage = !showLoginStage && ui.messages.length === 0;
+  const showGuestLanding = ui.isLoggedIn === false && !ui.authGateVisible;
+  const showLoginStage = !!ui.authGateVisible;
+  const showHomeStage = !showLoginStage && (showGuestLanding || ui.messages.length === 0);
   const stageClass = `${showLoginStage || showHomeStage ? "message-stack-welcome" : ""} ${
     showHomeStage ? "message-stack-home" : ""
   }`.trim();
   const messagesHtml = showLoginStage
     ? ""
-    : (ui.messages || [])
+    : showGuestLanding
+      ? ""
+      : (ui.messages || [])
         .map(
           (m) =>
             `<div id="msg-${escapeAttr(m.id)}" class="message-anchor">${renderMessageBubble(m)}</div>`
@@ -496,7 +596,7 @@ function renderChat() {
     (ui.voicePressActive ? " voice-hold-btn-recording" : "") +
     (ui.voicePressCancel ? " voice-hold-btn-cancel" : "");
   const voiceHoldText = ui.voicePressCancel ? "松手 取消" : "按住 说话";
-  const chatDraftPlaceholder = getChatDraftPlaceholder(ui.messages || []);
+  const chatDraftPlaceholder = showGuestLanding ? ui.inputPlaceholder : getChatDraftPlaceholder(ui.messages || []);
   const commonSheetOptionsHtml = (ui.commonSheetOptions || [])
     .map(
       (item, index, list) => `
@@ -1538,12 +1638,10 @@ function bindChat(root) {
         showBusyToast();
         return;
       }
-      ui.showCapsuleMenu = false;
-      ui.commonSheetVisible = false;
-      ui.keyboardVisible = false;
-      ui.showDrawer = true;
-      ui.showSettingsSheet = false;
-      mount();
+      if (!requireLogin("登录后可查看历史记录", { type: "open-drawer" })) {
+        return;
+      }
+      openDrawerPanel();
       return;
     }
     if (action === "close-drawer") {
@@ -1740,21 +1838,10 @@ function bindChat(root) {
         showBusyToast();
         return;
       }
-      const createdSession = mockChat.createSession();
-      mockChat.commitAssistantSegment({
-        sessionId: createdSession && createdSession.id,
-        segment: {
-          type: "text",
-          content: "已经帮你开启新对话了，现在输入新的问题吧~",
-        },
-      });
-      ui.draft = "";
-      ui.showCapsuleMenu = false;
-      ui.keyboardVisible = false;
-      ui.showDrawer = false;
-      ui.showSettingsSheet = false;
-      syncSession(createdSession && createdSession.id);
-      mount();
+      if (!requireLogin("登录后可创建新的咨询会话", { type: "new-session" })) {
+        return;
+      }
+      createFreshSession();
       return;
     }
     if (action === "pick-session") {
@@ -1766,12 +1853,15 @@ function bindChat(root) {
         showBusyToast();
         return;
       }
-      mockChat.activateSession(t.dataset.sessionId);
-      ui.draft = "";
-      ui.showCapsuleMenu = false;
-      ui.showDrawer = false;
-      syncSession(t.dataset.sessionId);
-      mount();
+      if (
+        !requireLogin("登录后可查看历史记录详情", {
+          type: "pick-session",
+          sessionId: t.dataset.sessionId,
+        })
+      ) {
+        return;
+      }
+      activateSessionById(t.dataset.sessionId);
       return;
     }
     if (action === "open-settings-sheet") {
@@ -1880,11 +1970,14 @@ function bindChat(root) {
   };
 }
 
-async function doSend() {
+async function doSend(forcedContent) {
   if (ui.isResponding) return;
   const ta = document.getElementById("chat-draft");
-  const content = `${(ta && ta.value) || ui.draft || ""}`.trim();
+  const content = `${forcedContent ?? (ta && ta.value) ?? ui.draft ?? ""}`.trim();
   if (!content) return;
+  if (!requireLogin("登录后可发送提问并获取回复", { type: "send", content })) {
+    return;
+  }
 
   const response = mockChat.sendMessage({ content, sessionId: ui.activeSessionId });
   if (!response) return;
@@ -1916,14 +2009,10 @@ function handleSettingsRow(key) {
     }
     mockChat.updateSettings({ loggedIn: true });
     ui.isLoggedIn = true;
-    ui.draft = "";
-    ui.showWelcome = true;
-    if (ui.messages && ui.messages.length > 0) {
-      const freshSession = mockChat.createSession();
-      syncSession(freshSession && freshSession.id);
-    }
+    closeAuthGate();
     showToast("已登录（Mock）");
     mount();
+    void resumePendingAuthAction();
     return;
   }
   if (key === "user-agreement") {
@@ -1978,6 +2067,8 @@ function handleSettingsRow(key) {
   if (key === "logout") {
     mockChat.updateSettings({ loggedIn: false });
     ui.isLoggedIn = false;
+    closeAuthGate();
+    pendingAuthAction = null;
     ui.inappSettingsPage = "main";
     ui.draft = "";
     ui.showDrawer = false;
