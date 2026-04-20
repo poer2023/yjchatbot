@@ -24,3 +24,5 @@ build/
 
 # Local / tooling
 .vercel/
+.vercel
+.env*.local
