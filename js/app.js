@@ -1,4 +1,4 @@
-import * as mockChat from "./mock-chat.js";
+import * as mockChat from "./mock-chat.js?v=20260424-chat-48";
 import { models, modelMap } from "./models.js";
 import { markdownToHtml } from "./rich-text.js?v=20260420-chat-9";
 import { getThemeClass, getThemeLabel, getTypingSpeedLabel } from "./helpers.js";
@@ -88,6 +88,8 @@ function escapeAttr(s) {
 
 const DEFAULT_INPUT_PLACEHOLDER = "输入问题，开始咨询吧~";
 const LONG_CHAT_INPUT_PLACEHOLDER = "耐心聊完更准确，发送“1”直接获取结论";
+const MOCK_VOICE_TO_TEXT_QUERY =
+  "我在一家公司工作了3年，上个月被突然口头辞退，没有书面通知，也没有签解除劳动合同协议，公司还拖欠我两个月工资和未休年假的补偿，我现在应该怎么维权？";
 
 function countCompletedDialogRounds(messages) {
   const list = Array.isArray(messages) ? messages : [];
@@ -122,7 +124,11 @@ function countCompletedDialogRounds(messages) {
 }
 
 function getChatDraftPlaceholder(messages) {
-  return countCompletedDialogRounds(messages) > 3 ? LONG_CHAT_INPUT_PLACEHOLDER : ui.inputPlaceholder;
+  return countCompletedDialogRounds(messages) > 3 ? "" : ui.inputPlaceholder;
+}
+
+function shouldShowConclusionBanner(messages) {
+  return countCompletedDialogRounds(messages) > 3;
 }
 
 const ui = {
@@ -174,6 +180,7 @@ const ui = {
   voicePressActive: false,
   voicePressCancel: false,
   voiceToTextActive: false,
+  voiceToTextStreaming: false,
   showCapsuleMenu: false,
   showDrawer: false,
   showSettingsSheet: false,
@@ -186,6 +193,7 @@ const ui = {
 let replyToken = "";
 let timerBag = [];
 let pendingAuthAction = null;
+let voiceToTextToken = 0;
 
 function cancelPendingPlayback() {
   replyToken = "";
@@ -251,14 +259,82 @@ function scrollToLatest(messages, anchorId) {
   scrollToAnchor(anchorId || (last ? `msg-${last.id}` : "welcome-anchor"));
 }
 
+function syncComposerDraft(root) {
+  const scope = root || document;
+  const ta = scope.querySelector("#chat-draft");
+  if (ta && ta.value !== ui.draft) {
+    ta.value = ui.draft;
+  }
+  if (ta) {
+    const length = ta.value.length;
+    if (typeof ta.setSelectionRange === "function") {
+      ta.setSelectionRange(length, length);
+    }
+  }
+  const sendBtn = scope.querySelector('[data-action="send"]');
+  const voiceBtn = scope.querySelector('[data-action="toggle-voice-to-text"]');
+  const can = ui.draft.trim().length > 0;
+  if (sendBtn) {
+    sendBtn.className =
+      "input-circle-btn input-circle-send" + (can && !ui.isResponding ? " input-circle-send-active" : "");
+    sendBtn.innerHTML =
+      can && !ui.isResponding
+        ? `<img class="send-plane-icon" src="${ICON}/send-plane-light.svg" alt="" />`
+        : ui.isResponding
+          ? `<span class="send-loading">…</span>`
+          : `<img class="send-plane-icon" src="${ICON}/send-plane.svg" alt="" />`;
+  }
+  if (voiceBtn) {
+    voiceBtn.classList.toggle("input-circle-voice-active", ui.voiceToTextActive);
+  }
+}
+
 let toastTimer;
 function showToast(title) {
   const node = document.getElementById("toast");
   if (!node) return;
   node.textContent = title;
+  node.classList.remove("toast-page-top", "toast-sheet-top");
+  node.classList.add(ui.sourceSheetVisible ? "toast-sheet-top" : "toast-page-top");
   node.classList.add("toast-visible");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => node.classList.remove("toast-visible"), 2200);
+}
+
+async function copyText(text) {
+  const value = `${text || ""}`;
+  if (!value) {
+    return false;
+  }
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch (error) {
+      // Fall through to execCommand fallback for in-app browsers.
+    }
+  }
+
+  try {
+    const tmp = document.createElement("textarea");
+    tmp.value = value;
+    tmp.setAttribute("readonly", "readonly");
+    tmp.style.position = "fixed";
+    tmp.style.opacity = "0";
+    tmp.style.pointerEvents = "none";
+    tmp.style.left = "-9999px";
+    tmp.style.top = "0";
+    document.body.appendChild(tmp);
+    tmp.focus();
+    tmp.select();
+    tmp.setSelectionRange(0, tmp.value.length);
+    const copied = document.execCommand("copy");
+    tmp.remove();
+    return !!copied;
+  } catch (error) {
+    return false;
+  }
 }
 
 function closeAuthGate() {
@@ -395,16 +471,55 @@ function enhanceRichSourceTrigger(html, messageId) {
   );
 }
 
+function getMessageSources(message) {
+  return Array.isArray(message?.extra?.sources) ? message.extra.sources : [];
+}
+
+function findMessageById(messageId) {
+  return (ui.messages || []).find((message) => message && message.id === messageId) || null;
+}
+
+function renderTextWithCitations(text, message) {
+  const sourceLinks = getMessageSources(message);
+  const raw = String(text || "");
+  if (!sourceLinks.length) {
+    return escapeHtml(raw);
+  }
+
+  let lastIndex = 0;
+  const chunks = [];
+  raw.replace(/\[(\d+)\]/g, (match, refNumber, offset) => {
+    if (offset > lastIndex) {
+      chunks.push(escapeHtml(raw.slice(lastIndex, offset)));
+    }
+    const sourceIndex = Number(refNumber) - 1;
+    const source = sourceLinks[sourceIndex];
+    if (source?.url) {
+      chunks.push(
+        `<button type="button" class="message-citation" data-action="copy-source-ref" data-url="${escapeAttr(
+          source.url
+        )}" aria-label="引用 ${escapeAttr(refNumber)}">${escapeHtml(refNumber)}</button>`
+      );
+    } else {
+      chunks.push(escapeHtml(match));
+    }
+    lastIndex = offset + match.length;
+    return match;
+  });
+
+  if (lastIndex < raw.length) {
+    chunks.push(escapeHtml(raw.slice(lastIndex)));
+  }
+
+  return chunks.join("");
+}
+
 function renderMessageBubble(message) {
   const theme = ui.settings.theme || "light";
   const isUser = message.role === "user";
-  const avatar = isUser
-    ? `<div class="user-avatar"><img class="user-avatar-image" src="${USER_AVATAR_URL}" alt="" /></div>`
-    : `<div class="assistant-avatar"><img class="assistant-avatar-image" src="./assets/images/welcome-balance.png" alt="" /></div>`;
-
   let inner = "";
   if (message.type === "text" || (message.type === "rich" && message.status === "streaming")) {
-    inner = `<div class="message-text">${escapeHtml(message.content || "")}</div>`;
+    inner = `<div class="message-text">${renderTextWithCitations(message.content || "", message)}</div>`;
   } else if (message.type === "rich") {
     const foldPayload = parseFoldableRichContent(message.content || "");
     if (foldPayload) {
@@ -470,14 +585,23 @@ function renderMessageBubble(message) {
     `message-bubble ${isUser ? "message-bubble-user" : "message-bubble-assistant"}` +
     (message.type === "typing" ? " message-bubble-typing" : "") +
     (message.type === "file-card" ? " message-bubble-plain-card" : "");
+  const showSourceTrigger =
+    !isUser && message.type === "text" && message.extra?.showSourceTrigger && getMessageSources(message).length > 0;
+  const sourceTriggerHtml = showSourceTrigger
+    ? `<button type="button" class="rich-source-trigger message-source-trigger" data-action="open-source-sheet" data-message-id="${escapeAttr(
+        message.id
+      )}">
+        <span>参考来源</span>
+        <span class="rich-source-arrow">›</span>
+      </button>`
+    : "";
 
   return `
     <div class="message-row ${isUser ? "message-row-user" : ""}">
-      ${isUser ? "" : avatar}
       <div class="message-main ${isUser ? "message-main-user" : ""}">
         <div class="${bubbleClass}">${inner}</div>
+        ${sourceTriggerHtml}
       </div>
-      ${isUser ? avatar : ""}
     </div>`;
 }
 
@@ -485,9 +609,19 @@ function renderChat() {
   const showGuestLanding = ui.isLoggedIn === false && !ui.authGateVisible;
   const showLoginStage = !!ui.authGateVisible;
   const showHomeStage = !showLoginStage && (showGuestLanding || ui.messages.length === 0);
+  const showConclusionBanner =
+    !showLoginStage && !showHomeStage && !showGuestLanding && shouldShowConclusionBanner(ui.messages || []);
   const stageClass = `${showLoginStage || showHomeStage ? "message-stack-welcome" : ""} ${
     showHomeStage ? "message-stack-home" : ""
   }`.trim();
+  const conclusionBannerHtml = showConclusionBanner
+    ? `<div class="conclusion-banner">
+        <span class="conclusion-banner-text">耐心聊完结果结果更准确</span>
+        <button type="button" class="conclusion-banner-btn" data-action="get-conclusion" ${
+          ui.isResponding ? "disabled" : ""
+        }>点击获取结论</button>
+      </div>`
+    : "";
   const messagesHtml = showLoginStage
     ? ""
     : showGuestLanding
@@ -503,7 +637,7 @@ function renderChat() {
     ? `<section class="login-stage">
         <div class="login-stage-upper">
           <div class="login-brand-row">
-            <div class="login-brand-logo">
+            <div class="login-brand-logo login-brand-logo-card">
               <img class="login-brand-logo-icon" src="./assets/images/welcome-balance.png" alt="涌见AI logo" />
             </div>
             <div class="login-brand-copy">
@@ -511,9 +645,41 @@ function renderChat() {
             </div>
           </div>
           <div class="login-feature-list" aria-label="功能说明">
-            <div class="login-feature-item"><strong>案情咨询：</strong><span>自然语言对话，了解案情</span></div>
-            <div class="login-feature-item"><strong>法律搜索：</strong><span>搜索法律法规及相似司法案例</span></div>
-            <div class="login-feature-item"><strong>出具意见：</strong><span>深入分析，生成法律意见书</span></div>
+            <div class="login-feature-item">
+              <span class="login-feature-icon login-feature-icon-chat" aria-hidden="true">
+                <span class="login-feature-chat-bubble"><span></span><span></span><span></span></span>
+              </span>
+              <span class="login-feature-copy">
+                <strong>案情咨询：</strong>
+                <span>自然语言对话，了解案情</span>
+              </span>
+            </div>
+            <span class="login-feature-divider" aria-hidden="true"></span>
+            <div class="login-feature-item">
+              <span class="login-feature-icon" aria-hidden="true">
+                <span class="login-feature-search-book">
+                  <span class="login-feature-search-book-lines"></span>
+                  <span class="login-feature-search-lens"></span>
+                </span>
+              </span>
+              <span class="login-feature-copy">
+                <strong>法律搜索：</strong>
+                <span>搜索法律法规及相似司法案例</span>
+              </span>
+            </div>
+            <span class="login-feature-divider" aria-hidden="true"></span>
+            <div class="login-feature-item">
+              <span class="login-feature-icon" aria-hidden="true">
+                <span class="login-feature-opinion-doc">
+                  <span class="login-feature-opinion-lines"></span>
+                  <span class="login-feature-opinion-pen"></span>
+                </span>
+              </span>
+              <span class="login-feature-copy">
+                <strong>出具意见：</strong>
+                <span>深入分析，生成法律意见书</span>
+              </span>
+            </div>
           </div>
         </div>
         <div class="login-actions">
@@ -550,6 +716,7 @@ function renderChat() {
     .join("");
 
   const canSend = ui.draft.trim().length > 0;
+  const showSendAction = canSend || ui.isResponding;
   const sendCircleClass =
     "input-circle-btn input-circle-send" + (canSend && !ui.isResponding ? " input-circle-send-active" : "");
   const sendInner =
@@ -646,14 +813,17 @@ function renderChat() {
     </div>`;
   const sourceSheetLinksHtml = (ui.sourceSheetLinks || [])
     .map(
-      (item) => `<button
+      (item, index) => `<button
         type="button"
         class="source-sheet-item"
         data-action="copy-source-link"
         data-url="${escapeAttr(item.url)}"
       >
-        <span class="source-sheet-item-title">${escapeHtml(item.title)}</span>
-        <span class="source-sheet-item-url">${escapeHtml(item.url)}</span>
+        <span class="source-sheet-item-index">${index + 1}</span>
+        <span class="source-sheet-item-copy">
+          <span class="source-sheet-item-title">${escapeHtml(item.title)}</span>
+          <span class="source-sheet-item-url">${escapeHtml(item.url)}</span>
+        </span>
       </button>`
     )
     .join("");
@@ -664,7 +834,12 @@ function renderChat() {
         <div class="source-sheet-card">
           <div class="source-sheet-head">
             <span class="source-sheet-title">${escapeHtml(ui.sourceSheetTitle || "参考来源")}</span>
-            <button type="button" class="source-sheet-close" data-action="close-source-sheet">完成</button>
+            <button
+              type="button"
+              class="source-sheet-close"
+              data-action="close-source-sheet"
+              aria-label="关闭参考来源"
+            >✕</button>
           </div>
           <div class="source-sheet-list">${sourceSheetLinksHtml}</div>
         </div>
@@ -765,40 +940,29 @@ function renderChat() {
         </div>
       </div>
     </div>`;
-  const inputAreaHtml = !ui.voiceMode
-    ? `<div class="input-main-capsule">
-          <button type="button" class="input-mic-wrap" data-action="stub" data-kind="voice" aria-label="语音输入" ${
-            ui.isResponding ? "disabled" : ""
-          }>
-            <img class="input-mic-icon" src="${ICON}/voice-wave.svg" alt="" />
-          </button>
+  const inputAreaHtml = `<div class="input-main-capsule">
           <textarea class="chat-textarea-flex" id="chat-draft" maxlength="2000" rows="1"
             placeholder="${escapeAttr(chatDraftPlaceholder)}" ${ui.isResponding ? "disabled" : ""}>${escapeHtml(
               ui.draft
             )}</textarea>
           <div class="input-trailing-actions">
-            <button type="button" class="input-circle-btn input-circle-voice${ui.voiceToTextActive ? " input-circle-voice-active" : ""}" data-action="toggle-voice-to-text" aria-label="语音转文字" ${
-              ui.isResponding ? "disabled" : ""
-            }><img class="input-voice-icon" src="${ICON}/mic.svg" alt="" /></button>
             <button type="button" class="input-circle-btn input-circle-plus" data-action="stub" data-kind="attach" aria-label="附件" ${
               ui.isResponding ? "disabled" : ""
             }><img class="input-plus-icon" src="${ICON}/attach-image.svg" alt="" /></button>
-            <button type="button" class="${sendCircleClass}" data-action="send" aria-label="发送" ${ui.isResponding ? "disabled" : ""}>
+            ${
+              showSendAction
+                ? `<button type="button" class="${sendCircleClass}" data-action="send" aria-label="发送" ${
+                    ui.isResponding ? "disabled" : ""
+                  }>
               ${sendInner}
-            </button>
+            </button>`
+                : `<button type="button" class="input-circle-btn input-circle-voice${
+                    ui.voiceToTextActive ? " input-circle-voice-active" : ""
+                  }" data-action="toggle-voice-to-text" aria-label="语音转文字" ${
+                    ui.isResponding ? "disabled" : ""
+                  }><img class="input-voice-icon" src="${ICON}/mic.svg" alt="" /></button>`
+            }
           </div>
-        </div>`
-    : `<div class="voice-mode-shell">
-          ${voiceWaveSectionInline}
-          <button type="button" id="voice-hold-btn" class="${voiceHoldClass}" aria-label="按住说话">
-            <span class="voice-hold-leading" aria-hidden="true">
-              <img class="voice-hold-leading-icon" src="${ICON}/voice-text.svg" alt="" />
-            </span>
-            <span class="voice-hold-text">${voiceHoldText}</span>
-            <span class="voice-hold-trailing" aria-hidden="true">
-              <img class="voice-hold-trailing-icon" src="${ICON}/send-plane.svg" alt="" />
-            </span>
-          </button>
         </div>`;
 
   const sessionToolbarChat = "";
@@ -833,7 +997,9 @@ function renderChat() {
           <div class="header-left-actions ${showLoginStage ? "header-left-actions-hidden" : ""}">
             ${
               showLoginStage
-                ? ""
+                ? `<button type="button" class="nav-icon-button nav-back-button" data-action="close-auth-gate" aria-label="返回">
+                    <span class="nav-back-chevron" aria-hidden="true"></span>
+                  </button>`
                 : `<button type="button" class="nav-icon-button" data-action="open-drawer" aria-label="菜单">
                     <span class="menu-bars"><span class="menu-bar menu-bar-top"></span><span class="menu-bar menu-bar-bottom"></span></span>
                   </button>
@@ -869,6 +1035,7 @@ function renderChat() {
           <div id="welcome-anchor"></div>
           ${loginBlock}
           ${homeBlock}
+          ${conclusionBannerHtml}
           ${messagesHtml}
         </div>
       </div>
@@ -1365,6 +1532,46 @@ function bindChat(root) {
 
   const ta = root.querySelector("#chat-draft");
   const attachImageInput = root.querySelector("#attach-image-input");
+  const streamMockVoiceToText = async () => {
+    if (ui.voiceToTextStreaming) {
+      return;
+    }
+    const currentTa = root.querySelector("#chat-draft");
+    if (!currentTa) {
+      return;
+    }
+    voiceToTextToken += 1;
+    const currentToken = voiceToTextToken;
+    ui.voiceToTextActive = true;
+    ui.voiceToTextStreaming = true;
+    ui.draft = "";
+    mount();
+    const mountedTa = document.getElementById("chat-draft");
+    if (mountedTa) {
+      syncingKeyboardFocus = true;
+      mountedTa.focus();
+      requestAnimationFrame(() => {
+        syncingKeyboardFocus = false;
+      });
+    }
+    try {
+      for (const ch of MOCK_VOICE_TO_TEXT_QUERY) {
+        if (currentToken !== voiceToTextToken || !ui.voiceToTextStreaming) {
+          return;
+        }
+        ui.draft += ch;
+        syncComposerDraft(document);
+        await delay(ch === "，" || ch === "。" || ch === "？" ? 120 : 36);
+      }
+      showToast("语音转文字已完成（演示）");
+    } finally {
+      if (currentToken === voiceToTextToken) {
+        ui.voiceToTextStreaming = false;
+        mount();
+      }
+    }
+  };
+
   if (attachImageInput) {
     attachImageInput.addEventListener("change", () => {
       const file = attachImageInput.files && attachImageInput.files[0];
@@ -1390,18 +1597,7 @@ function bindChat(root) {
     });
     ta.addEventListener("input", () => {
       ui.draft = ta.value;
-      const sendBtn = root.querySelector('[data-action="send"]');
-      if (sendBtn) {
-        const can = ui.draft.trim().length > 0;
-        sendBtn.className =
-          "input-circle-btn input-circle-send" + (can && !ui.isResponding ? " input-circle-send-active" : "");
-        sendBtn.innerHTML =
-          can && !ui.isResponding
-            ? `<img class="send-plane-icon" src="${ICON}/send-plane-light.svg" alt="" />`
-            : ui.isResponding
-              ? `<span class="send-loading">…</span>`
-              : `<img class="send-plane-icon" src="${ICON}/send-plane.svg" alt="" />`;
-      }
+      syncComposerDraft(root);
     });
     ta.addEventListener("keydown", (ev) => {
       if (ev.key === "Enter" && !ev.shiftKey) {
@@ -1687,9 +1883,10 @@ function bindChat(root) {
       return;
     }
     if (action === "open-source-sheet") {
+      const message = findMessageById(t.dataset.messageId || "");
       ui.keyboardVisible = false;
-      ui.sourceSheetTitle = "参考来源";
-      ui.sourceSheetLinks = MOCK_SOURCE_LINKS;
+      ui.sourceSheetTitle = message?.extra?.sourceSheetTitle || "参考来源";
+      ui.sourceSheetLinks = getMessageSources(message).length ? getMessageSources(message) : MOCK_SOURCE_LINKS;
       ui.sourceSheetVisible = true;
       mount();
       return;
@@ -1705,19 +1902,22 @@ function bindChat(root) {
         showToast("链接不存在");
         return;
       }
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(url);
-        } else {
-          const tmp = document.createElement("textarea");
-          tmp.value = url;
-          document.body.appendChild(tmp);
-          tmp.select();
-          document.execCommand("copy");
-          tmp.remove();
-        }
-        showToast("已复制链接");
-      } catch (error) {
+      if (await copyText(url)) {
+        showToast("网页链接已复制，请在浏览器中打开");
+      } else {
+        showToast("复制失败，请手动复制");
+      }
+      return;
+    }
+    if (action === "copy-source-ref") {
+      const url = t.dataset.url || "";
+      if (!url) {
+        showToast("链接不存在");
+        return;
+      }
+      if (await copyText(url)) {
+        showToast("网页链接已复制，请在浏览器中打开");
+      } else {
         showToast("复制失败，请手动复制");
       }
       return;
@@ -1833,6 +2033,11 @@ function bindChat(root) {
       mount();
       return;
     }
+    if (action === "close-auth-gate") {
+      closeAuthGate();
+      mount();
+      return;
+    }
     if (action === "new-session") {
       if (ui.isResponding) {
         showBusyToast();
@@ -1907,16 +2112,8 @@ function bindChat(root) {
 
       const stubTitles = {
         thinking: "深度思考已开启",
-        voice: "语音输入模式已开启",
       };
       if (stubTitles[kind]) {
-        if (kind === "voice") {
-          ui.voiceMode = true;
-          ui.voicePressActive = false;
-          ui.voicePressCancel = false;
-          mount();
-          return;
-        }
         showToast(stubTitles[kind]);
         return;
       }
@@ -1942,13 +2139,31 @@ function bindChat(root) {
       return;
     }
     if (action === "toggle-voice-to-text") {
-      ui.voiceToTextActive = !ui.voiceToTextActive;
-      showToast(ui.voiceToTextActive ? "语音转文字已开启（演示）" : "语音转文字已关闭");
-      mount();
+      if (ui.voiceToTextStreaming) {
+        voiceToTextToken += 1;
+        ui.voiceToTextStreaming = false;
+        ui.voiceToTextActive = false;
+        showToast("语音转文字已中断");
+        mount();
+        return;
+      }
+      if (ui.voiceToTextActive) {
+        voiceToTextToken += 1;
+        ui.voiceToTextActive = false;
+        showToast("语音转文字已关闭");
+        mount();
+        return;
+      }
+      showToast("正在转写语音（演示）");
+      void streamMockVoiceToText();
       return;
     }
     if (action === "send") {
       await doSend();
+      return;
+    }
+    if (action === "get-conclusion") {
+      await doSend("1");
       return;
     }
     if (action === "toggle-login-agreement") {
@@ -1984,6 +2199,9 @@ async function doSend(forcedContent) {
 
   ui.draft = "";
   ui.isResponding = true;
+  ui.voiceToTextActive = false;
+  ui.voiceToTextStreaming = false;
+  voiceToTextToken += 1;
   ui.showCapsuleMenu = false;
   ui.showDrawer = false;
   ui.showSettingsSheet = false;

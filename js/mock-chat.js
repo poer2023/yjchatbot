@@ -1,4 +1,4 @@
-import * as storage from "./storage.js";
+import * as storage from "./storage.js?v=20260424-chat-48";
 import { defaultModelId, getModel, models } from "./models.js";
 import { createId } from "./id.js";
 import { clamp, deepClone, truncateText } from "./helpers.js";
@@ -14,6 +14,8 @@ const DEFAULT_SETTINGS = {
 
 const DEFAULT_SESSION_TITLE = "新的对话";
 const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFENSE_SESSION_TITLE = "什么叫正当防卫";
+const DEFENSE_SESSION_PREVIEW = "正当防卫是为了制止正在发生的不法侵害而采取的必要防卫行为。";
 const LEGAL_SESSION_TITLE = "诈骗案怎么判刑";
 const LEGAL_SESSION_PREVIEW = "您刚才提到当事人被羁押了，我需要确认具体是在哪个看守所。";
 const GEO_SESSION_TITLE = "美国与伊朗要打仗么？";
@@ -181,6 +183,47 @@ function buildLegalSessionMessages(sessionId) {
   ];
 }
 
+function buildDefenseSessionMessages(sessionId) {
+  const sources = [
+    {
+      id: "src-defense-1",
+      title: "中华人民共和国刑法第二十条",
+      url: "https://flk.npc.gov.cn/detail2.html?ZmY4MDgxODE3OTZhNjM2YjAxNzk3MjhlYjUxNzA4Y2Y",
+    },
+    {
+      id: "src-defense-2",
+      title: "最高人民法院、最高人民检察院、公安部关于依法适用正当防卫制度的指导意见",
+      url: "https://www.court.gov.cn/zixun/xiangqing/248421.html",
+    },
+    {
+      id: "src-defense-3",
+      title: "最高人民检察院：依法准确把握正当防卫界限",
+      url: "https://www.spp.gov.cn/spp/zdgz/202009/t20200903_478483.shtml",
+    },
+  ];
+
+  return [
+    buildUserMessage(sessionId, "什么叫正当防卫"),
+    buildAssistantMessage(
+      sessionId,
+      "text",
+      [
+        "正当防卫，是指为了制止正在进行的不法侵害，对不法侵害人采取的必要制止行为；只要没有明显超过必要限度造成重大损害，一般不负刑事责任。[1]",
+        "",
+        "通俗一点说，必须同时满足几个关键条件：一是确实存在现实且正在发生的不法侵害；二是防卫对象必须是不法侵害人本人；三是防卫行为要服务于制止侵害，而不是事后报复；四是防卫强度原则上不能明显失衡。[1][2]",
+        "",
+        "如果面对的是严重危及人身安全的暴力犯罪，例如行凶、杀人、抢劫、强奸、绑架等，法律对防卫人的保护会更强，只要是为了制止这类侵害，即使造成侵害人伤亡，也可能依法认定为正当防卫。[1][2][3]",
+      ].join("\n"),
+      {
+        ...createAssistantSnapshot("deepseek"),
+        sourceSheetTitle: "参考来源",
+        sources,
+        showSourceTrigger: true,
+      }
+    ),
+  ];
+}
+
 function hasLegalPdfRound(messages) {
   const list = Array.isArray(messages) ? messages : [];
   const hasUserPrompt = list.some(
@@ -335,6 +378,31 @@ function ensureGeoSessionSeeded() {
   if (!Array.isArray(state.messagesBySession[geoSession.id]) || !state.messagesBySession[geoSession.id].length) {
     state.messagesBySession[geoSession.id] = buildGeoSessionMessages(geoSession.id);
   }
+  sortSessions();
+}
+
+function ensureDefenseSessionSeeded() {
+  const defenseSession = state.sessions.find((session) => session.title === DEFENSE_SESSION_TITLE);
+  if (!defenseSession) {
+    const seeded = {
+      id: createId("session"),
+      modelId: "deepseek",
+      previewText: DEFENSE_SESSION_PREVIEW,
+      title: DEFENSE_SESSION_TITLE,
+      updatedAt: Date.now() + 3000,
+    };
+    state.sessions.unshift(seeded);
+    state.messagesBySession[seeded.id] = buildDefenseSessionMessages(seeded.id);
+    state.activeSessionId = seeded.id;
+    sortSessions();
+    return;
+  }
+
+  defenseSession.modelId = "deepseek";
+  defenseSession.previewText = DEFENSE_SESSION_PREVIEW;
+  defenseSession.updatedAt = Date.now() + 3000;
+  state.messagesBySession[defenseSession.id] = buildDefenseSessionMessages(defenseSession.id);
+  state.activeSessionId = defenseSession.id;
   sortSessions();
 }
 
@@ -534,6 +602,7 @@ function ensureState(force) {
 
   ensureLegalSessionPinned();
   ensureGeoSessionSeeded();
+  ensureDefenseSessionSeeded();
   ensureMockHistoryDensity();
   persistState();
   return state;

@@ -1,7 +1,7 @@
 import { deepClone } from "./helpers.js";
 
 const SETTINGS_KEY = "yjchatbot:settings:v1";
-const STATE_KEY = "yjchatbot:state:v1";
+const STATE_KEY = "yjchatbot:state:v2";
 
 export function loadSettings() {
   try {
